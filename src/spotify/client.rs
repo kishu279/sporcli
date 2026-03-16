@@ -42,7 +42,11 @@ impl SpotifyClient {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // load credentials
         match storage::load_credentials() {
-            Ok(token) if token.is_valid() && !token.is_expired() => {
+            Ok(token)
+                if token.is_valid()
+                    && !token.is_expired()
+                    && auth_handler::has_required_scopes(token.scope.as_deref()) =>
+            {
                 tracing::info!(
                     "[auth_flow] Found valid cached token, expires_at: {:?}",
                     token.expires_at
@@ -60,14 +64,23 @@ impl SpotifyClient {
                     ))
                     .await?;
             }
-            Ok(token) if token.is_valid() => {
+            Ok(token)
+                if token.is_valid()
+                    && auth_handler::has_required_scopes(token.scope.as_deref()) =>
+            {
                 tracing::warn!(
                     "[auth_flow] Token expired (expires_at: {:?}), attempting refresh",
                     token.expires_at
                 );
                 // Token expired but valid, try refresh
                 let refresh_token_str = token.refresh_token.clone().unwrap();
-                match auth_handler::refresh_token(&refresh_token_str, &refresh_token_str).await {
+                match auth_handler::refresh_token(
+                    &refresh_token_str,
+                    &refresh_token_str,
+                    token.scope.as_deref(),
+                )
+                .await
+                {
                     Ok(new_token) => {
                         tracing::info!("[auth_flow] Token refreshed successfully");
                         let new_refresh =
@@ -98,6 +111,20 @@ impl SpotifyClient {
                         self.authenticate(&state_tx).await?;
                     }
                 }
+            }
+            Ok(token) if token.is_valid() => {
+                tracing::warn!(
+                    "[auth_flow] Cached token missing required scopes: {:?}. Starting full OAuth flow",
+                    token.scope
+                );
+                state_tx
+                    .send(crate::events::message::StateUpdateEnum::Error(
+                        "Spotify permissions changed. Please authenticate again to grant the required scopes."
+                            .to_string(),
+                    ))
+                    .await
+                    .ok();
+                self.authenticate(state_tx).await?;
             }
             _ => {
                 tracing::info!("[auth_flow] No valid token found, starting full OAuth flow");
@@ -155,7 +182,7 @@ impl SpotifyClient {
 
     pub async fn play(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let endpoint = "/v1/me/player/play";
-        tracing::debug!("[api] PUT {}", endpoint);
+        tracing::trace!("[api] → PUT {}{}  body: (empty)", BASE_URL, endpoint);
         let res = self
             .http
             .put(format!("{}{}", BASE_URL, endpoint))
@@ -172,7 +199,7 @@ impl SpotifyClient {
 
     pub async fn pause(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let endpoint = "/v1/me/player/pause";
-        tracing::debug!("[api] PUT {}", endpoint);
+        tracing::trace!("[api] → PUT {}{}  body: (empty)", BASE_URL, endpoint);
         let res = self
             .http
             .put(format!("{}{}", BASE_URL, endpoint))
@@ -189,7 +216,7 @@ impl SpotifyClient {
 
     pub async fn skip_next(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let endpoint = "/v1/me/player/next";
-        tracing::debug!("[api] POST {}", endpoint);
+        tracing::trace!("[api] → POST {}{}  body: (empty)", BASE_URL, endpoint);
         let res = self
             .http
             .post(format!("{}{}", BASE_URL, endpoint))
@@ -206,7 +233,7 @@ impl SpotifyClient {
 
     pub async fn skip_previous(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let endpoint = "/v1/me/player/previous";
-        tracing::debug!("[api] POST {}", endpoint);
+        tracing::trace!("[api] → POST {}{}  body: (empty)", BASE_URL, endpoint);
         let res = self
             .http
             .post(format!("{}{}", BASE_URL, endpoint))
@@ -228,7 +255,7 @@ impl SpotifyClient {
     ) -> Result<Option<crate::events::message::Track>, Box<dyn std::error::Error + Send + Sync>>
     {
         let endpoint = "/v1/me/player/currently-playing";
-        tracing::debug!("[api] GET {}", endpoint);
+        tracing::trace!("[api] → GET {}{}", BASE_URL, endpoint);
         let res = self
             .http
             .get(format!("{}{}", BASE_URL, endpoint))
@@ -238,7 +265,19 @@ impl SpotifyClient {
         let status = res.status();
 
         if status == 204 {
-            return Ok(None);
+            // get the recently music played
+            match self.get_recently_played().await.ok() {
+                Some(data) => {
+                    tracing::info!("[api] Recently played tracks recieved");
+                    if let Some(track) = data.first() {
+                        return Ok(Some(track.clone()));
+                    }
+                }
+                None => {
+                    tracing::info!("[api] No recently played tracks found");
+                    return Ok(None);
+                }
+            }
         }
 
         let body = res.text().await.unwrap_or_default();
@@ -274,7 +313,7 @@ impl SpotifyClient {
     ) -> Result<Vec<crate::events::message::Playlist>, Box<dyn std::error::Error + Send + Sync>>
     {
         let endpoint = "/v1/me/playlists";
-        tracing::debug!("[api] GET {}", endpoint);
+        tracing::trace!("[api] → GET {}{}", BASE_URL, endpoint);
         let res = self
             .http
             .get(format!("{}{}", BASE_URL, endpoint))
@@ -310,7 +349,7 @@ impl SpotifyClient {
         &self,
     ) -> Result<Vec<crate::events::message::Device>, Box<dyn std::error::Error + Send + Sync>> {
         let endpoint = "/v1/me/player/devices";
-        tracing::debug!("[api] GET {}", endpoint);
+        tracing::trace!("[api] → GET {}{}", BASE_URL, endpoint);
         let res = self
             .http
             .get(format!("{}{}", BASE_URL, endpoint))
@@ -360,7 +399,13 @@ impl SpotifyClient {
             play: true,
         };
 
-        tracing::debug!("[api] PUT {} transfer to device {}", endpoint, device_id);
+        let body_preview = format!("{{\"device_ids\":[\"{}\"]}}", device_id);
+        tracing::trace!(
+            "[api] → PUT {}{}  body: {}",
+            BASE_URL,
+            endpoint,
+            body_preview
+        );
         let res = self
             .http
             .put(format!("{}{}", BASE_URL, endpoint))
@@ -392,7 +437,7 @@ impl SpotifyClient {
         let encoded = urlencoding::encode(query);
         // Feb 2026: dev mode max limit is 10, paginate with offset for more
         let endpoint = format!("/v1/search?q={}&type=track&limit=10", encoded);
-        tracing::debug!("[api] GET {}", endpoint);
+        tracing::trace!("[api] → GET {}{}", BASE_URL, endpoint);
         let res = self
             .http
             .get(format!("{}{}", BASE_URL, &endpoint))
@@ -430,7 +475,7 @@ impl SpotifyClient {
         &self,
     ) -> Result<crate::events::message::UserProfile, Box<dyn std::error::Error + Send + Sync>> {
         let endpoint = "/v1/me";
-        tracing::debug!("[api] GET {}", endpoint);
+        tracing::trace!("[api] → GET {}{}", BASE_URL, endpoint);
         let res = self
             .http
             .get(format!("{}{}", BASE_URL, endpoint))
@@ -460,5 +505,55 @@ impl SpotifyClient {
         };
 
         Ok(profile)
+    }
+
+    // ── Recently Played ────────────────────────────────────────
+
+    pub async fn get_recently_played(
+        &self,
+    ) -> Result<Vec<crate::events::message::Track>, Box<dyn std::error::Error + Send + Sync>> {
+        let endpoint = "/v1/me/player/recently-played";
+        tracing::trace!("[api] → GET {}{}", BASE_URL, endpoint);
+        let res = self
+            .http
+            .get(format!("{}{}", BASE_URL, endpoint))
+            .bearer_auth(self.token()?)
+            .send()
+            .await?;
+        let status = res.status();
+        let body = res.text().await.unwrap_or_default();
+        if status == reqwest::StatusCode::FORBIDDEN {
+            tracing::warn!(
+                "[api] GET {} -> 403 Forbidden (missing scope: user-read-recently-played). Re-authenticate to grant access.",
+                endpoint
+            );
+            return Ok(vec![]);
+        }
+        Self::handle_response_status(status, endpoint, body.clone())?;
+
+        let data: serde_json::Value = serde_json::from_str(&body)?;
+
+        let mut tracks = vec![];
+        if let Some(items) = data["items"].as_array() {
+            for item in items {
+                if let Some(track) = item.get("track") {
+                    tracks.push(crate::events::message::Track {
+                        name: track["name"].as_str().unwrap_or("Unknown").to_string(),
+                        artist: track["artists"][0]["name"]
+                            .as_str()
+                            .unwrap_or("Unknown")
+                            .to_string(),
+                        album: track["album"]["name"]
+                            .as_str()
+                            .unwrap_or("Unknown")
+                            .to_string(),
+                        duration_ms: track["duration_ms"].as_u64().unwrap_or(0),
+                        progress_ms: 0,
+                    });
+                }
+            }
+        }
+
+        Ok(tracks)
     }
 }

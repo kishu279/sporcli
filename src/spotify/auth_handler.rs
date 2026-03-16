@@ -7,6 +7,26 @@ use sha2::{Digest, Sha256};
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
 
+pub const REQUIRED_SCOPES: &[&str] = &[
+    "playlist-read-private",
+    "user-library-read",
+    "user-read-currently-playing",
+    "user-modify-playback-state",
+    "user-read-playback-state",
+    "user-read-recently-played",
+];
+
+pub fn has_required_scopes(scope: Option<&str>) -> bool {
+    let granted_scopes = scope
+        .unwrap_or_default()
+        .split_whitespace()
+        .collect::<std::collections::HashSet<_>>();
+
+    REQUIRED_SCOPES
+        .iter()
+        .all(|required_scope| granted_scopes.contains(required_scope))
+}
+
 // generate the pkce pair which to be verirified by the server
 pub fn generate_pkce_pair() -> (String, String) {
     use rand::distributions::{Alphanumeric, DistString};
@@ -35,14 +55,7 @@ pub async fn authorize(
     tracing::info!("[authorize] Generating PKCE pair and auth URL");
     let (code_verifier, code_challenge) = generate_pkce_pair();
 
-    let scopes = [
-        "playlist-read-private",
-        "user-library-read",
-        "user-read-currently-playing",
-        "user-modify-playback-state",
-        "user-read-playback-state",
-    ]
-    .join("%20");
+    let scopes = REQUIRED_SCOPES.join("%20");
 
     let auth_url = format!(
         "https://accounts.spotify.com/authorize?client_id={}&response_type=code&redirect_uri={}&code_challenge_method=S256&code_challenge={}&scope={}",
@@ -214,6 +227,7 @@ pub async fn get_token(
 pub async fn refresh_token(
     refresh_token: &str,
     old_refresh_token: &str,
+    old_scope: Option<&str>,
 ) -> Result<TokenResponse, Box<dyn std::error::Error + Send + Sync>> {
     tracing::info!("[refresh_token] Requesting refreshed token from Spotify");
     let mut headers = HeaderMap::new();
@@ -245,7 +259,7 @@ pub async fn refresh_token(
                 .or(Some(old_refresh_token.to_string())),
             expires_at: Some(chrono::Utc::now().timestamp() + body.expires_in.unwrap()),
             token_type: body.token_type.clone(),
-            scope: body.scope.clone(),
+            scope: body.scope.clone().or_else(|| old_scope.map(str::to_string)),
         };
 
         storage::save_credentials(&stored_token)?;

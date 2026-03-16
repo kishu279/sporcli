@@ -462,3 +462,5 @@ fn render_player_bar(f: &mut Frame, app: &AppState, area: Rect) {
         pill_inner,
     );
 }
+
+

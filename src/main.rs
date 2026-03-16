@@ -19,6 +19,20 @@ use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<(), io::Error> {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    let log_dir = format!("{}/.config/sporc", home);
+    std::fs::create_dir_all(&log_dir).ok();
+    let file_appender = tracing_appender::rolling::never(&log_dir, "sporc.log");
+    tracing_subscriber::fmt()
+        .with_writer(file_appender)
+        .with_ansi(false)
+        .with_target(true)
+        .with_level(true)
+        .with_env_filter(tracing_subscriber::EnvFilter::new("debug"))
+        .init();
+
+    tracing::info!("starting sporcli");
+
     // App State
     let mut app = AppState::new();
 
@@ -49,6 +63,8 @@ async fn main() -> Result<(), io::Error> {
     // worker_handle.await.ok();
     spotify_worker_handler.abort();
 
+    tracing::info!("sporcli shutdown complete");
+
     Ok(())
 }
 
@@ -62,9 +78,9 @@ async fn run_app(
         while let Ok(update) = state_rx.try_recv() {
             match update {
                 StateUpdateEnum::AuthStatus(auth_state) => {
-                    // tracing::info!("[main] AuthStatus received: {:?}", auth_state);
+                    tracing::info!("[main] AuthStatus received: {:?}", auth_state);
                     if AuthState::Authenticated == auth_state.clone() {
-                        // tracing::info!("[main] Authenticated! Firing post-auth API calls");
+                        tracing::info!("[main] Authenticated! Firing post-auth API calls");
 
                         // start polling
                         // poll_signal_tx.send(true).ok();
@@ -88,14 +104,14 @@ async fn run_app(
                     app.volume = Some(volume);
                 }
                 StateUpdateEnum::Error(msg) => {
-                    // tracing::error!("[main] Error received: {}", msg);
+                    tracing::error!("[main] Error received: {}", msg);
                     app.error_message = Some(msg);
                 }
                 StateUpdateEnum::CopyUrl(url) => {
                     app.auth_url = Some(url);
                 }
                 StateUpdateEnum::Playlists(playlists) => {
-                    // tracing::info!("[main] Playlists received: {} items", playlists.len());
+                    tracing::info!("[main] Playlists received: {} items", playlists.len());
                     app.error_message = None;
                     app.playlist = Some(playlists.iter().map(|p| p.name.clone()).collect());
 
@@ -103,7 +119,7 @@ async fn run_app(
                     // poll_signal_tx.send(false).ok();
                 }
                 StateUpdateEnum::TrackList(tracks) => {
-                    // tracing::info!("[main] TrackList received: {} items", tracks.len());
+                    tracing::info!("[main] TrackList received: {} items", tracks.len());
                     app.error_message = None;
                     app.music_list = Some(
                         tracks
@@ -113,7 +129,7 @@ async fn run_app(
                     );
                 }
                 StateUpdateEnum::UserProfile(profile) => {
-                    // tracing::info!("[main] UserProfile received: {:?}", profile.display_name);
+                    tracing::info!("[main] UserProfile received: {:?}", profile.display_name);
                     app.error_message = None;
                     app.user_profile = Some(profile);
                 }
@@ -125,8 +141,12 @@ async fn run_app(
         if event::poll(Duration::from_millis(16))? {
             if let Event::Key(key) = event::read()? {
                 match key.code {
-                    KeyCode::Char('q') => return Ok(()),
+                    KeyCode::Char('q') => {
+                        tracing::info!("[main] Quit key pressed");
+                        return Ok(());
+                    }
                     KeyCode::Char('a') => {
+                        tracing::info!("[main] Authenticate key pressed");
                         action_tx.try_send(Action::Authenticate).ok();
                     }
                     KeyCode::Char('c') => {
@@ -134,6 +154,7 @@ async fn run_app(
 
                         if let Some(url) = app.auth_url.clone() {
                             clipboard.set_text(url).ok();
+                            tracing::info!("[main] Auth URL copied to clipboard");
                             // clipboard.set().text(url).ok();
                             std::thread::sleep(Duration::from_millis(200));
                         }

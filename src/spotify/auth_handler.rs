@@ -32,7 +32,7 @@ pub async fn authorize(
     redirect_uri: &str,
     state_tx: &tokio::sync::mpsc::Sender<StateUpdateEnum>,
 ) -> Result<(String, String), Box<dyn std::error::Error + Send + Sync>> {
-    // tracing::info!("[authorize] Generating PKCE pair and auth URL");
+    tracing::info!("[authorize] Generating PKCE pair and auth URL");
     let (code_verifier, code_challenge) = generate_pkce_pair();
 
     let scopes = [
@@ -61,10 +61,10 @@ pub async fn authorize(
     // update the app state
     state_tx.send(StateUpdateEnum::CopyUrl(auth_url)).await?;
 
-    // tracing::info!("[authorize] Binding to 127.0.0.1:8888, waiting for OAuth callback...");
+    tracing::info!("[authorize] Binding to 127.0.0.1:8888, waiting for OAuth callback...");
     let listener = TcpListener::bind("127.0.0.1:8888")?;
     let (mut stream, _) = listener.accept()?;
-    // tracing::info!("[authorize] Callback received");
+    tracing::info!("[authorize] Callback received");
 
     let mut reader = BufReader::new(&stream);
     let mut request_line = String::new();
@@ -163,7 +163,7 @@ pub async fn get_token(
 
     let client = Client::new();
 
-    // tracing::info!("[get_token] Requesting token from Spotify");
+    tracing::info!("[get_token] Requesting token from Spotify");
     let res = client
         .post(url)
         .headers(headers)
@@ -171,10 +171,10 @@ pub async fn get_token(
         .send()
         .await?;
 
-    // tracing::info!("[get_token] Response status: {}", res.status());
+    tracing::info!("[get_token] Response status: {}", res.status());
     if res.status().is_success() {
         let body = res.json::<TokenResponse>().await?;
-        // tracing::info!("[get_token] Token received, scope: {:?}", body.scope);
+        tracing::info!("[get_token] Token received, scope: {:?}", body.scope);
 
         // Convert expires_in (seconds) → absolute timestamp
         let stored_token = StoredToken {
@@ -187,7 +187,7 @@ pub async fn get_token(
 
         // save the token
         storage::save_credentials(&stored_token)?;
-        // tracing::info!("[get_token] Token saved to disk");
+        tracing::info!("[get_token] Token saved to disk");
 
         return Ok(body);
     }
@@ -198,11 +198,11 @@ pub async fn get_token(
         .text()
         .await
         .unwrap_or_else(|_| "Unable to read error".to_string());
-    // tracing::error!(
-    //     "[get_token] Token request failed: {} - {}",
-    //     status,
-    //     error_body
-    // );
+    tracing::error!(
+        "[get_token] Token request failed: {} - {}",
+        status,
+        error_body
+    );
     Err(format!(
         "Token request failed with status {}: {}",
         status, error_body
@@ -215,6 +215,7 @@ pub async fn refresh_token(
     refresh_token: &str,
     old_refresh_token: &str,
 ) -> Result<TokenResponse, Box<dyn std::error::Error + Send + Sync>> {
+    tracing::info!("[refresh_token] Requesting refreshed token from Spotify");
     let mut headers = HeaderMap::new();
     let url = "https://accounts.spotify.com/api/token";
 
@@ -231,6 +232,7 @@ pub async fn refresh_token(
 
     let client = Client::new();
     let res = client.post(url).form(&payload).send().await?;
+    tracing::info!("[refresh_token] Response status: {}", res.status());
 
     if res.status().is_success() {
         let body = res.json::<TokenResponse>().await?;
@@ -247,10 +249,12 @@ pub async fn refresh_token(
         };
 
         storage::save_credentials(&stored_token)?;
+        tracing::info!("[refresh_token] Refreshed token saved to disk");
 
         return Ok(body);
     }
 
     // on failure
+    tracing::error!("[refresh_token] Refresh token request failed");
     Err("Refresh token failed".into())
 }

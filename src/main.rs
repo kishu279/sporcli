@@ -220,6 +220,9 @@ async fn run_app(
                             if app.selected_device_index > 0 {
                                 app.selected_device_index -= 1;
                             }
+                        } else {
+                            tracing::info!("[main] PreviousTrack requested");
+                            action_tx.try_send(Action::PreviousTrack).ok();
                         }
                     }
                     KeyCode::Right => {
@@ -228,6 +231,9 @@ async fn run_app(
                             if len > 0 && app.selected_device_index < len - 1 {
                                 app.selected_device_index += 1;
                             }
+                        } else {
+                            tracing::info!("[main] NextTrack requested");
+                            action_tx.try_send(Action::NextTrack).ok();
                         }
                     }
                     KeyCode::Enter => {

@@ -66,6 +66,14 @@ pub async fn spotify_worker(
                         .send(StateUpdateEnum::Error(format!("Skip next failed: {}", e)))
                         .await
                         .ok();
+                } else {
+                    if let Ok(Some(track)) = spotify_client.get_current_track().await {
+                        state_tx.send(StateUpdateEnum::TrackInfo(track)).await.ok();
+                    }
+                    state_tx
+                        .send(StateUpdateEnum::PlaybackStatus(true))
+                        .await
+                        .ok();
                 }
             }
             Some(Action::PreviousTrack) => {
@@ -77,6 +85,14 @@ pub async fn spotify_worker(
                             "Skip previous failed: {}",
                             e
                         )))
+                        .await
+                        .ok();
+                } else {
+                    if let Ok(Some(track)) = spotify_client.get_current_track().await {
+                        state_tx.send(StateUpdateEnum::TrackInfo(track)).await.ok();
+                    }
+                    state_tx
+                        .send(StateUpdateEnum::PlaybackStatus(true))
                         .await
                         .ok();
                 }

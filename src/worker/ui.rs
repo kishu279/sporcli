@@ -255,6 +255,10 @@ fn render_page_spotify(f: &mut Frame, app: &AppState) {
 
     // --- Bottom: command bar ---
     let cmd_bar = Paragraph::new(Line::from(vec![
+        Span::styled(" [←/→] ", Style::default().fg(Color::Green).bold()),
+        Span::styled("Prev/Next  ", Style::default().fg(Color::White)),
+        Span::styled(" [space] ", Style::default().fg(Color::Green).bold()),
+        Span::styled("Play/Pause  ", Style::default().fg(Color::White)),
         Span::styled(" [q] ", Style::default().fg(Color::Green).bold()),
         Span::styled("Quit", Style::default().fg(Color::White)),
     ]))
@@ -384,11 +388,11 @@ fn render_track_info_panel(f: &mut Frame, app: &AppState, area: Rect) {
                     Style::default().fg(Color::Cyan).bold(),
                 )),
                 Line::from(Span::styled(
-                    format!("    {}", track.artist),
+                    format!(" Artist: {}", track.artist),
                     Style::default().fg(Color::White),
                 )),
                 Line::from(Span::styled(
-                    format!("    {}", track.album),
+                    format!(" Album: {}", track.album),
                     Style::default().fg(Color::DarkGray),
                 )),
                 Line::from(""),
@@ -410,7 +414,7 @@ fn render_track_info_panel(f: &mut Frame, app: &AppState, area: Rect) {
         ))],
     };
 
-    f.render_widget(Paragraph::new(lines), inner);
+    f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
 }
 
 // ── Bottom: Search Box ────────────────────────────────────────────────────────

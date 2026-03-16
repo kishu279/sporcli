@@ -113,6 +113,49 @@ pub async fn spotify_worker(
                     }
                 }
             }
+            Some(Action::GetDevices) => {
+                tracing::info!("[worker] Action: GetDevices");
+                match spotify_client.get_available_devices().await {
+                    Ok(devices) => {
+                        tracing::info!("[worker] Devices received: {}", devices.len());
+                        state_tx.send(StateUpdateEnum::Devices(devices)).await.ok();
+                    }
+                    Err(e) => {
+                        tracing::error!("[worker] GetDevices failed: {}", e);
+                        state_tx
+                            .send(StateUpdateEnum::Error(format!(
+                                "Failed to get devices: {}",
+                                e
+                            )))
+                            .await
+                            .ok();
+                    }
+                }
+            }
+            Some(Action::ChangeDevice(device_id)) => {
+                tracing::info!("[worker] Action: ChangeDevice -> {}", device_id);
+                match spotify_client.change_devices(&device_id).await {
+                    Ok(()) => {
+                        state_tx
+                            .send(StateUpdateEnum::PlaybackStatus(true))
+                            .await
+                            .ok();
+                        if let Ok(devices) = spotify_client.get_available_devices().await {
+                            state_tx.send(StateUpdateEnum::Devices(devices)).await.ok();
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("[worker] ChangeDevice failed: {}", e);
+                        state_tx
+                            .send(StateUpdateEnum::Error(format!(
+                                "Failed to change device: {}",
+                                e
+                            )))
+                            .await
+                            .ok();
+                    }
+                }
+            }
             Some(Action::GetPlaylists) => {
                 tracing::info!("[worker] Action: GetPlaylists");
                 match spotify_client.get_playlists().await {

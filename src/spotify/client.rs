@@ -137,32 +137,24 @@ impl SpotifyClient {
         Ok(())
     }
 
-    // methods
-    async fn api_get(
-        &self,
+    // Helper to handle response status and errors
+    fn handle_response_status(
+        status: reqwest::StatusCode,
         endpoint: &str,
-    ) -> Result<reqwest::Response, Box<dyn std::error::Error + Send + Sync>> {
-        tracing::debug!("[api] GET {}", endpoint);
-        let res = self
-            .http
-            .get(format!("{}{}", BASE_URL, endpoint))
-            .bearer_auth(self.token()?)
-            .send()
-            .await?;
-        let status = res.status();
-        tracing::debug!("[api] GET {} -> status: {}", endpoint, status);
+        body: String,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if !status.is_success() {
-            let body = res.text().await.unwrap_or_default();
-            tracing::error!("[api] GET {} failed: {} - {}", endpoint, status, body);
+            tracing::error!("[api] Request failed: {} - {}", status, body);
             return Err(format!("API error {} for {}: {}", status, endpoint, body).into());
         }
-        Ok(res)
+        Ok(())
     }
 
-    async fn api_put(
-        &self,
-        endpoint: &str,
-    ) -> Result<reqwest::Response, Box<dyn std::error::Error + Send + Sync>> {
+    // function calls
+    // ── Playback Controls ──────────────────────────────────────
+
+    pub async fn play(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let endpoint = "/v1/me/player/play";
         tracing::debug!("[api] PUT {}", endpoint);
         let res = self
             .http
@@ -173,61 +165,59 @@ impl SpotifyClient {
             .send()
             .await?;
         let status = res.status();
-        tracing::debug!("[api] PUT {} -> status: {}", endpoint, status);
-        if !status.is_success() {
-            let body = res.text().await.unwrap_or_default();
-            tracing::error!("[api] PUT {} failed: {} - {}", endpoint, status, body);
-            return Err(format!("API error {} for {}: {}", status, endpoint, body).into());
-        }
-        Ok(res)
+        let body = res.text().await.unwrap_or_default();
+        Self::handle_response_status(status, endpoint, body)?;
+        Ok(())
     }
 
-    async fn api_post(
-        &self,
-        endpoint: &str,
-    ) -> Result<reqwest::Response, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn pause(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let endpoint = "/v1/me/player/pause";
+        tracing::debug!("[api] PUT {}", endpoint);
+        let res = self
+            .http
+            .put(format!("{}{}", BASE_URL, endpoint))
+            .bearer_auth(self.token()?)
+            .header("Content-Length", "0")
+            .body("")
+            .send()
+            .await?;
+        let status = res.status();
+        let body = res.text().await.unwrap_or_default();
+        Self::handle_response_status(status, endpoint, body)?;
+        Ok(())
+    }
+
+    pub async fn skip_next(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let endpoint = "/v1/me/player/next";
         tracing::debug!("[api] POST {}", endpoint);
         let res = self
             .http
             .post(format!("{}{}", BASE_URL, endpoint))
             .bearer_auth(self.token()?)
             .header("Content-Length", "0")
+            .body("")
             .send()
             .await?;
         let status = res.status();
-        tracing::debug!("[api] POST {} -> status: {}", endpoint, status);
-        if !status.is_success() {
-            let body = res.text().await.unwrap_or_default();
-            tracing::error!("[api] POST {} failed: {} - {}", endpoint, status, body);
-            return Err(format!("API error {} for {}: {}", status, endpoint, body).into());
-        }
-        Ok(res)
-    }
-
-    // function calls
-    // ── Playback Controls ──────────────────────────────────────
-
-    pub async fn play(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        tracing::trace!("[api] playback play");
-        self.api_put("/v1/me/player/play").await?;
-        Ok(())
-    }
-
-    pub async fn pause(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        tracing::trace!("[api] playback pause");
-        self.api_put("/v1/me/player/pause").await?;
-        Ok(())
-    }
-
-    pub async fn skip_next(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        tracing::trace!("[api] playback next");
-        self.api_post("/v1/me/player/next").await?;
+        let body = res.text().await.unwrap_or_default();
+        Self::handle_response_status(status, endpoint, body)?;
         Ok(())
     }
 
     pub async fn skip_previous(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        tracing::trace!("[api] playback previous");
-        self.api_post("/v1/me/player/previous").await?;
+        let endpoint = "/v1/me/player/previous";
+        tracing::debug!("[api] POST {}", endpoint);
+        let res = self
+            .http
+            .post(format!("{}{}", BASE_URL, endpoint))
+            .bearer_auth(self.token()?)
+            .header("Content-Length", "0")
+            .body("")
+            .send()
+            .await?;
+        let status = res.status();
+        let body = res.text().await.unwrap_or_default();
+        Self::handle_response_status(status, endpoint, body)?;
         Ok(())
     }
 
@@ -237,14 +227,24 @@ impl SpotifyClient {
         &self,
     ) -> Result<Option<crate::events::message::Track>, Box<dyn std::error::Error + Send + Sync>>
     {
-        tracing::trace!("[api] get_current_track");
-        let response = self.api_get("/v1/me/player/currently-playing").await?;
+        let endpoint = "/v1/me/player/currently-playing";
+        tracing::debug!("[api] GET {}", endpoint);
+        let res = self
+            .http
+            .get(format!("{}{}", BASE_URL, endpoint))
+            .bearer_auth(self.token()?)
+            .send()
+            .await?;
+        let status = res.status();
 
-        if response.status() == 204 {
+        if status == 204 {
             return Ok(None);
         }
 
-        let data: serde_json::Value = response.json().await?;
+        let body = res.text().await.unwrap_or_default();
+        Self::handle_response_status(status, endpoint, body.clone())?;
+
+        let data: serde_json::Value = serde_json::from_str(&body)?;
 
         if let Some(item) = data.get("item") {
             let track = crate::events::message::Track {
@@ -273,9 +273,19 @@ impl SpotifyClient {
         &self,
     ) -> Result<Vec<crate::events::message::Playlist>, Box<dyn std::error::Error + Send + Sync>>
     {
-        tracing::trace!("[api] get_playlists");
-        let response = self.api_get("/v1/me/playlists").await?;
-        let data: serde_json::Value = response.json().await?;
+        let endpoint = "/v1/me/playlists";
+        tracing::debug!("[api] GET {}", endpoint);
+        let res = self
+            .http
+            .get(format!("{}{}", BASE_URL, endpoint))
+            .bearer_auth(self.token()?)
+            .send()
+            .await?;
+        let status = res.status();
+        let body = res.text().await.unwrap_or_default();
+        Self::handle_response_status(status, endpoint, body.clone())?;
+
+        let data: serde_json::Value = serde_json::from_str(&body)?;
 
         let mut playlists = vec![];
         if let Some(items) = data["items"].as_array() {
@@ -294,6 +304,75 @@ impl SpotifyClient {
         Ok(playlists)
     }
 
+    // ── Devices ────────────────────────────────────────────────
+
+    pub async fn get_available_devices(
+        &self,
+    ) -> Result<Vec<crate::events::message::Device>, Box<dyn std::error::Error + Send + Sync>> {
+        let endpoint = "/v1/me/player/devices";
+        tracing::debug!("[api] GET {}", endpoint);
+        let res = self
+            .http
+            .get(format!("{}{}", BASE_URL, endpoint))
+            .bearer_auth(self.token()?)
+            .send()
+            .await?;
+        let status = res.status();
+        let body = res.text().await.unwrap_or_default();
+        Self::handle_response_status(status, endpoint, body.clone())?;
+
+        let data: serde_json::Value = serde_json::from_str(&body)?;
+
+        let mut devices = vec![];
+        if let Some(items) = data["devices"].as_array() {
+            for item in items {
+                devices.push(crate::events::message::Device {
+                    id: item["id"].as_str().unwrap_or("").to_string(),
+                    name: item["name"]
+                        .as_str()
+                        .unwrap_or("Unknown Device")
+                        .to_string(),
+                    is_active: item["is_active"].as_bool().unwrap_or(false),
+                    device_type: item["type"].as_str().unwrap_or("Unknown").to_string(),
+                    volume_percent: item["volume_percent"]
+                        .as_u64()
+                        .and_then(|v| u8::try_from(v).ok()),
+                });
+            }
+        }
+
+        Ok(devices)
+    }
+
+    pub async fn change_devices(
+        &self,
+        device_id: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        #[derive(serde::Serialize)]
+        struct TransferPlaybackPayload {
+            device_ids: Vec<String>,
+            play: bool,
+        }
+
+        let endpoint = "/v1/me/player";
+        let payload = TransferPlaybackPayload {
+            device_ids: vec![device_id.to_string()],
+            play: true,
+        };
+
+        tracing::debug!("[api] PUT {} transfer to device {}", endpoint, device_id);
+        let res = self
+            .http
+            .put(format!("{}{}", BASE_URL, endpoint))
+            .bearer_auth(self.token()?)
+            .json(&payload)
+            .send()
+            .await?;
+        let status = res.status();
+        let body = res.text().await.unwrap_or_default();
+        Self::handle_response_status(status, endpoint, body)?;
+        Ok(())
+    }
     // ── Liked Songs ────────────────────────────────────────────
     // NOTE: GET /v1/me/tracks removed in Feb 2026 dev mode migration.
     // Use GET /me/library/contains or extended quota mode to restore this.
@@ -310,12 +389,21 @@ impl SpotifyClient {
         &self,
         query: &str,
     ) -> Result<Vec<crate::events::message::Track>, Box<dyn std::error::Error + Send + Sync>> {
-        tracing::trace!("[api] search query='{}'", query);
         let encoded = urlencoding::encode(query);
         // Feb 2026: dev mode max limit is 10, paginate with offset for more
         let endpoint = format!("/v1/search?q={}&type=track&limit=10", encoded);
-        let response = self.api_get(&endpoint).await?;
-        let data: serde_json::Value = response.json().await?;
+        tracing::debug!("[api] GET {}", endpoint);
+        let res = self
+            .http
+            .get(format!("{}{}", BASE_URL, &endpoint))
+            .bearer_auth(self.token()?)
+            .send()
+            .await?;
+        let status = res.status();
+        let body = res.text().await.unwrap_or_default();
+        Self::handle_response_status(status, &endpoint, body.clone())?;
+
+        let data: serde_json::Value = serde_json::from_str(&body)?;
 
         let mut tracks = vec![];
         if let Some(items) = data["tracks"]["items"].as_array() {
@@ -341,9 +429,19 @@ impl SpotifyClient {
     pub async fn me(
         &self,
     ) -> Result<crate::events::message::UserProfile, Box<dyn std::error::Error + Send + Sync>> {
-        tracing::trace!("[api] get profile /v1/me");
-        let response = self.api_get("/v1/me").await?;
-        let data: serde_json::Value = response.json().await?;
+        let endpoint = "/v1/me";
+        tracing::debug!("[api] GET {}", endpoint);
+        let res = self
+            .http
+            .get(format!("{}{}", BASE_URL, endpoint))
+            .bearer_auth(self.token()?)
+            .send()
+            .await?;
+        let status = res.status();
+        let body = res.text().await.unwrap_or_default();
+        Self::handle_response_status(status, endpoint, body.clone())?;
+
+        let data: serde_json::Value = serde_json::from_str(&body)?;
 
         // Feb 2026: email, country, product, followers removed from dev mode
         let profile = crate::events::message::UserProfile {

@@ -1,4 +1,7 @@
-use crate::{app_state::AppState, events::message::AuthState};
+use crate::{
+    app_state::{AppState, Focus},
+    events::message::AuthState,
+};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -101,7 +104,7 @@ pub fn render(f: &mut Frame, app: &AppState) {
 
 fn render_main_screen(
     f: &mut Frame,
-    app: &AppState,
+    _app: &AppState,
     line: Vec<Line<'_>>,
     commands: Vec<Line<'_>>,
     title: String,
@@ -220,9 +223,9 @@ fn render_page_spotify(f: &mut Frame, app: &AppState) {
     let right_rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Min(5), 
-            Constraint::Length(5)
-
+            Constraint::Min(3),
+            Constraint::Length(3),
+            Constraint::Length(3),
         ])
         .split(cols[1]);
 
@@ -248,6 +251,7 @@ fn render_page_spotify(f: &mut Frame, app: &AppState) {
 
     render_search_box(f, app, bottom_cols[0]);
     render_player_bar(f, app, bottom_cols[1]);
+    render_device_bar(f, app, right_rows[2]);
 
     // --- Bottom: command bar ---
     let cmd_bar = Paragraph::new(Line::from(vec![
@@ -438,29 +442,95 @@ fn render_player_bar(f: &mut Frame, app: &AppState, area: Rect) {
     let inner = block.inner(area);
     f.render_widget(block, area);
 
-    // Centred rounded-border pill button
-    let label = if !app.is_playing { "  ▶  " } else { "  ‖  " };
-    let pill_width = 9u16;
-    let pill_x = inner.x + inner.width.saturating_sub(pill_width) / 2;
-    let pill_area = Rect {
-        x: pill_x,
-        y: inner.y,
-        width: pill_width.min(inner.width),
-        height: inner.height,
-    };
-
-    let pill_block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .style(Style::new().white().on_black());
-    let pill_inner = pill_block.inner(pill_area);
-    f.render_widget(pill_block, pill_area);
+    // Three controls: previous | play/pause | next (no button borders)
+    let sections = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(33),
+            Constraint::Percentage(34),
+            Constraint::Percentage(33),
+        ])
+        .split(inner);
 
     f.render_widget(
-        Paragraph::new(Span::styled(label, Style::default().fg(Color::Cyan).bold()))
-            .alignment(Alignment::Center),
-        pill_inner,
+        Paragraph::new(Span::styled(
+            " ⏪ ",
+            Style::default().fg(Color::Cyan).bold(),
+        ))
+        .alignment(Alignment::Center),
+        sections[0],
+    );
+
+    let play_label = if !app.is_playing { " ▶ " } else { " ⏸ " };
+    f.render_widget(
+        Paragraph::new(Span::styled(
+            play_label,
+            Style::default().fg(Color::Cyan).bold(),
+        ))
+        .alignment(Alignment::Center),
+        sections[1],
+    );
+
+    f.render_widget(
+        Paragraph::new(Span::styled(
+            " ⏩ ",
+            Style::default().fg(Color::Cyan).bold(),
+        ))
+        .alignment(Alignment::Center),
+        sections[2],
     );
 }
 
+// ── Bottom: Device Status Bar ────────────────────────────────────────────────
+fn render_device_bar(f: &mut Frame, app: &AppState, area: Rect) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .style(Style::new().white().on_black())
+        .title(Span::styled(" Devices ", Style::default().fg(Color::Cyan)));
 
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    let line = match (&app.auth_state, &app.available_devices) {
+        (_, Some(devices)) if !devices.is_empty() => {
+            let mut spans: Vec<Span> = Vec::new();
+            let devices_len = devices.len();
+            for (i, device) in devices.iter().enumerate() {
+                let marker = if device.is_active { "●" } else { "○" };
+                let text = format!("{} {}", marker, device.name);
+                let style = if i == app.selected_device_index {
+                    match app.focus {
+                        Focus::Devices => Style::default().fg(Color::Cyan).bold(),
+                        _ => Style::default().fg(Color::White).bold(),
+                    }
+                } else {
+                    Style::default().fg(Color::White)
+                };
+
+                spans.push(Span::styled(text, style));
+                if i + 1 < devices_len {
+                    spans.push(Span::styled(
+                        "   |   ",
+                        Style::default().fg(Color::DarkGray),
+                    ));
+                }
+            }
+            Line::from(spans)
+        }
+        (AuthState::Authenticated, None) => Line::from(Span::styled(
+            spinner_text(app.tick, "Loading devices"),
+            Style::default().fg(Color::Yellow),
+        )),
+        _ => Line::from(Span::styled(
+            " No devices",
+            Style::default().fg(Color::DarkGray),
+        )),
+    };
+
+    f.render_widget(
+        Paragraph::new(line)
+            .alignment(Alignment::Left)
+            .wrap(Wrap { trim: true }),
+        inner,
+    );
+}

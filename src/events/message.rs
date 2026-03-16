@@ -5,6 +5,8 @@ pub enum Action {
     Play,
     Pause,
     GetCurrentTrack,
+    GetDevices,
+    ChangeDevice(String),
     PreviousTrack,
     NextTrack,
     VolumeUp,
@@ -23,6 +25,7 @@ pub enum StateUpdateEnum {
     AuthStatus(AuthState),
     PlaybackStatus(bool),
     Volume(u8),
+    Devices(Vec<Device>),
     Playlists(Vec<Playlist>),
     TrackInfo(Track),
     TrackList(Vec<Track>),
@@ -65,4 +68,13 @@ pub struct UserProfile {
     pub followers: u64,
     pub profile_image_url: Option<String>,
     pub uri: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct Device {
+    pub id: String,
+    pub name: String,
+    pub is_active: bool,
+    pub device_type: String,
+    pub volume_percent: Option<u8>,
 }

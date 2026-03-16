@@ -91,6 +91,7 @@ async fn run_app(
                         action_tx.try_send(Action::GetPlaylists).ok();
                         action_tx.try_send(Action::GetLikedSongs).ok();
                         action_tx.try_send(Action::GetCurrentTrack).ok();
+                        action_tx.try_send(Action::GetDevices).ok();
                     }
 
                     app.auth_state = auth_state;
@@ -104,6 +105,16 @@ async fn run_app(
                 }
                 StateUpdateEnum::Volume(volume) => {
                     app.volume = Some(volume);
+                }
+                StateUpdateEnum::Devices(devices) => {
+                    app.error_message = None;
+                    app.available_devices = Some(devices);
+                    let len = app.available_devices.as_ref().map_or(0, |d| d.len());
+                    if len == 0 {
+                        app.selected_device_index = 0;
+                    } else if app.selected_device_index >= len {
+                        app.selected_device_index = len - 1;
+                    }
                 }
 
                 // ERROR
@@ -177,6 +188,7 @@ async fn run_app(
                             }
                         }
                         Focus::Search => {}
+                        Focus::Devices => {}
                     },
                     KeyCode::Down => match app.focus {
                         Focus::Playlist => {
@@ -192,19 +204,48 @@ async fn run_app(
                             }
                         }
                         Focus::Search => {}
+                        Focus::Devices => {}
                     },
                     KeyCode::Tab => {
-                        // Cycle focus: Playlist -> MusicList -> Search -> Playlist
+                        // Cycle focus: Playlist -> MusicList -> Search -> Devices -> Playlist
                         app.focus = match app.focus {
                             Focus::Playlist => Focus::MusicList,
                             Focus::MusicList => Focus::Search,
-                            Focus::Search => Focus::Playlist,
+                            Focus::Search => Focus::Devices,
+                            Focus::Devices => Focus::Playlist,
                         };
+                    }
+                    KeyCode::Left => {
+                        if let Focus::Devices = app.focus {
+                            if app.selected_device_index > 0 {
+                                app.selected_device_index -= 1;
+                            }
+                        }
+                    }
+                    KeyCode::Right => {
+                        if let Focus::Devices = app.focus {
+                            let len = app.available_devices.as_ref().map_or(0, |d| d.len());
+                            if len > 0 && app.selected_device_index < len - 1 {
+                                app.selected_device_index += 1;
+                            }
+                        }
+                    }
+                    KeyCode::Enter => {
+                        if let Focus::Devices = app.focus {
+                            if let Some(devices) = app.available_devices.as_ref() {
+                                if let Some(device) = devices.get(app.selected_device_index) {
+                                    tracing::info!("[main] ChangeDevice requested: {}", device.id);
+                                    action_tx
+                                        .try_send(Action::ChangeDevice(device.id.clone()))
+                                        .ok();
+                                }
+                            }
+                        }
                     }
                     KeyCode::Char(' ') => {
                         if app.is_playing {
                             action_tx.try_send(Action::Pause).ok();
-                        } else {    
+                        } else {
                             action_tx.try_send(Action::Play).ok();
                         }
                     }

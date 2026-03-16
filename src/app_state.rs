@@ -1,4 +1,4 @@
-use crate::events::message::{AuthState, Track, UserProfile};
+use crate::events::message::{AuthState, Device, Track, UserProfile};
 
 pub struct AppState {
     pub auth_url: Option<String>,
@@ -7,6 +7,7 @@ pub struct AppState {
     pub playlist: Option<Vec<String>>,
     pub search: Option<String>,
     pub music_list: Option<Vec<String>>,
+    pub available_devices: Option<Vec<Device>>,
 
     pub auth_state: AuthState,             // From events::AuthState
     pub current_track_info: Option<Track>, // From events::Track
@@ -15,6 +16,7 @@ pub struct AppState {
     pub focus: Focus,
     pub selected_playlist_index: usize,
     pub selected_music_index: usize,
+    pub selected_device_index: usize,
 
     pub tick: usize,
     pub error_message: Option<String>,
@@ -25,6 +27,7 @@ pub enum Focus {
     Playlist,
     Search,
     MusicList,
+    Devices,
 }
 
 impl AppState {
@@ -36,6 +39,7 @@ impl AppState {
             error_message: None,
             is_playing: false,
             music_list: None,
+            available_devices: None,
             playlist: None,
             search: None,
             status: None,
@@ -44,6 +48,7 @@ impl AppState {
             focus: Focus::Playlist,
             selected_playlist_index: 0,
             selected_music_index: 0,
+            selected_device_index: 0,
             tick: 0,
         }
     }

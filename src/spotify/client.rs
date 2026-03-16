@@ -168,6 +168,8 @@ impl SpotifyClient {
             .http
             .put(format!("{}{}", BASE_URL, endpoint))
             .bearer_auth(self.token()?)
+            .header("Content-Length", "0")
+            .body("")
             .send()
             .await?;
         let status = res.status();
@@ -258,6 +260,7 @@ impl SpotifyClient {
                 duration_ms: item["duration_ms"].as_u64().unwrap_or(0),
                 progress_ms: data["progress_ms"].as_u64().unwrap_or(0),
             };
+
             Ok(Some(track))
         } else {
             Ok(None)

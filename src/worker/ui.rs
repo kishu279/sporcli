@@ -439,7 +439,7 @@ fn render_player_bar(f: &mut Frame, app: &AppState, area: Rect) {
     f.render_widget(block, area);
 
     // Centred rounded-border pill button
-    let label = if app.is_playing { "  ▶  " } else { "  ‖  " };
+    let label = if !app.is_playing { "  ▶  " } else { "  ‖  " };
     let pill_width = 9u16;
     let pill_x = inner.x + inner.width.saturating_sub(pill_width) / 2;
     let pill_area = Rect {

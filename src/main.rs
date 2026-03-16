@@ -13,6 +13,7 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
+
 use ratatui::{Terminal, backend::CrosstermBackend};
 use std::io;
 use std::time::Duration;
@@ -96,6 +97,7 @@ async fn run_app(
                 }
                 StateUpdateEnum::TrackInfo(track) => {
                     app.current_track_info = Some(track);
+                    app.is_playing = true;
                 }
                 StateUpdateEnum::PlaybackStatus(is_playing) => {
                     app.is_playing = is_playing;
@@ -103,6 +105,8 @@ async fn run_app(
                 StateUpdateEnum::Volume(volume) => {
                     app.volume = Some(volume);
                 }
+
+                // ERROR
                 StateUpdateEnum::Error(msg) => {
                     tracing::error!("[main] Error received: {}", msg);
                     app.error_message = Some(msg);
@@ -196,6 +200,13 @@ async fn run_app(
                             Focus::MusicList => Focus::Search,
                             Focus::Search => Focus::Playlist,
                         };
+                    }
+                    KeyCode::Char(' ') => {
+                        if app.is_playing {
+                            action_tx.try_send(Action::Pause).ok();
+                        } else {    
+                            action_tx.try_send(Action::Play).ok();
+                        }
                     }
                     _ => {}
                 }

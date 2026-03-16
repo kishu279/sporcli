@@ -88,10 +88,16 @@ pub async fn spotify_worker(
                         state_tx.send(StateUpdateEnum::TrackInfo(track)).await.ok();
                     }
                     Ok(None) => {
+                        // Not sending this error / we can send not playing enum update
                         state_tx
                             .send(StateUpdateEnum::Error(
                                 "No track currently playing".to_string(),
                             ))
+                            .await
+                            .ok();
+
+                        state_tx
+                            .send(StateUpdateEnum::PlaybackStatus(false))
                             .await
                             .ok();
                     }

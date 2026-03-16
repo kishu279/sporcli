@@ -219,7 +219,11 @@ fn render_page_spotify(f: &mut Frame, app: &AppState) {
     // Vertical: main panels (top) | bottom bar
     let right_rows = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(3)])
+        .constraints([
+            Constraint::Min(5), 
+            Constraint::Length(5)
+
+        ])
         .split(cols[1]);
 
     // Top: 3 panels side by side

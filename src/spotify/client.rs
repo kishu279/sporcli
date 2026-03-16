@@ -260,7 +260,7 @@ impl SpotifyClient {
     pub async fn get_playlists(
         &self,
     ) -> Result<Vec<crate::events::message::Playlist>, Box<dyn std::error::Error + Send + Sync>> {
-        let response = self.api_get("/v1/me/playlists?limit=50").await?;
+        let response = self.api_get("/v1/me/playlists").await?;
         let data: serde_json::Value = response.json().await?;
 
         let mut playlists = vec![];
@@ -347,4 +347,6 @@ impl SpotifyClient {
 
         Ok(profile)
     }
+
+
 }

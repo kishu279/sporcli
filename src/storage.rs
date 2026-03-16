@@ -9,7 +9,7 @@ pub fn save_credentials(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let home = std::env::var("HOME")?;
     let dir_path = format!("{}/.config/sporc", home);
-    let file_path = format!("{}/credentials", dir_path);
+    let file_path = format!("{}/credentials.json", dir_path);
 
     // Create directory if not exists
     fs::create_dir_all(&dir_path)?;

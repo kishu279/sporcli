@@ -4,10 +4,9 @@ mod spotify;
 mod storage;
 mod worker;
 
-use crate::events::message::AuthState;
-use crate::events::message::{Action, StateUpdateEnum};
+use crate::events::message::{Action, AuthState, StateUpdateEnum};
 use crate::worker::{spotify_worker, ui};
-use app_state::AppState;
+use app_state::{AppState, Focus};
 use arboard::Clipboard;
 use crossterm::{
     event::{self, Event, KeyCode},
@@ -141,42 +140,42 @@ async fn run_app(
 
                         // action_tx.try_send(Action::CC).ok();
                     }
-                    // KeyCode::Up => match app.focus {
-                    //     Focus::Playlist => {
-                    //         if app.selected_playlist_index > 0 {
-                    //             app.selected_playlist_index -= 1;
-                    //         }
-                    //     }
-                    //     Focus::MusicList => {
-                    //         if app.selected_music_index > 0 {
-                    //             app.selected_music_index -= 1;
-                    //         }
-                    //     }
-                    //     Focus::Search => {}
-                    // },
-                    // KeyCode::Down => match app.focus {
-                    //     Focus::Playlist => {
-                    //         let len = app.playlist.as_ref().map_or(0, |p| p.len());
-                    //         if len > 0 && app.selected_playlist_index < len - 1 {
-                    //             app.selected_playlist_index += 1;
-                    //         }
-                    //     }
-                    //     Focus::MusicList => {
-                    //         let len = app.music_list.as_ref().map_or(0, |m| m.len());
-                    //         if len > 0 && app.selected_music_index < len - 1 {
-                    //             app.selected_music_index += 1;
-                    //         }
-                    //     }
-                    //     Focus::Search => {}
-                    //                     },
-                    // KeyCode::Tab => {
-                    //     // Cycle focus: Playlist -> MusicList -> Search -> Playlist
-                    //     app.focus = match app.focus {
-                    //         Focus::Playlist => Focus::MusicList,
-                    //         Focus::MusicList => Focus::Search,
-                    //         Focus::Search => Focus::Playlist,
-                    //     };
-                    // }
+                    KeyCode::Up => match app.focus {
+                        Focus::Playlist => {
+                            if app.selected_playlist_index > 0 {
+                                app.selected_playlist_index -= 1;
+                            }
+                        }
+                        Focus::MusicList => {
+                            if app.selected_music_index > 0 {
+                                app.selected_music_index -= 1;
+                            }
+                        }
+                        Focus::Search => {}
+                    },
+                    KeyCode::Down => match app.focus {
+                        Focus::Playlist => {
+                            let len = app.playlist.as_ref().map_or(0, |p| p.len());
+                            if len > 0 && app.selected_playlist_index < len - 1 {
+                                app.selected_playlist_index += 1;
+                            }
+                        }
+                        Focus::MusicList => {
+                            let len = app.music_list.as_ref().map_or(0, |m| m.len());
+                            if len > 0 && app.selected_music_index < len - 1 {
+                                app.selected_music_index += 1;
+                            }
+                        }
+                        Focus::Search => {}
+                    },
+                    KeyCode::Tab => {
+                        // Cycle focus: Playlist -> MusicList -> Search -> Playlist
+                        app.focus = match app.focus {
+                            Focus::Playlist => Focus::MusicList,
+                            Focus::MusicList => Focus::Search,
+                            Focus::Search => Focus::Playlist,
+                        };
+                    }
                     _ => {}
                 }
             }

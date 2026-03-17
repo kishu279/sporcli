@@ -16,7 +16,8 @@ use crossterm::{
 
 use ratatui::{Terminal, backend::CrosstermBackend};
 use std::io;
-use std::time::Duration;
+// use std::time::Duration;
+use tokio::time::{Duration, timeout};
 
 #[tokio::main]
 async fn main() -> Result<(), io::Error> {
@@ -96,9 +97,19 @@ async fn run_app(
 
                     app.auth_state = auth_state;
                 }
+                // CURRENT TRACK
                 StateUpdateEnum::TrackInfo(track) => {
                     app.current_track_info = Some(track);
                     app.is_playing = true;
+
+                    match timeout(Duration::from_secs(5), async {
+                        action_tx.try_send(Action::GetCurrentTrack).ok();
+                    })
+                    .await
+                    {
+                        Ok(_) => tracing::info!("Fetching the current track"),
+                        Err(_) => tracing::info!("Error while fetching"),
+                    }
                 }
                 StateUpdateEnum::PlaybackStatus(is_playing) => {
                     app.is_playing = is_playing;
@@ -115,12 +126,43 @@ async fn run_app(
                     } else if app.selected_device_index >= len {
                         app.selected_device_index = len - 1;
                     }
+
+                    match timeout(Duration::from_secs(10), async {
+                        action_tx.try_send(Action::GetDevices).ok();
+                    })
+                    .await
+                    {
+                        Ok(_) => tracing::info!("Fetching the current devices"),
+                        Err(_) => tracing::info!("Error while fetching"),
+                    }
                 }
 
                 // ERROR
                 StateUpdateEnum::Error(msg) => {
                     tracing::error!("[main] Error received: {}", msg);
                     app.error_message = Some(msg);
+
+                    // ERROR -> CLEANUP
+
+                    match timeout(Duration::from_secs(5), async {
+                        // // call the apis
+                        app.error_message = None;
+
+                        // action_tx.try_send(Action::GetProfile).ok();
+                        // action_tx.try_send(Action::GetPlaylists).ok();
+                        // action_tx.try_send(Action::GetLikedSongs).ok();
+                        // action_tx.try_send(Action::GetCurrentTrack).ok();
+                        // action_tx.try_send(Action::GetDevices).ok();
+                    })
+                    .await
+                    {
+                        Ok(_) => {
+                            tracing::info!(
+                                "called the api's after few seconds for refreshing the state"
+                            )
+                        }
+                        Err(_) => tracing::info!("Error while fetching with url"),
+                    };
                 }
                 StateUpdateEnum::CopyUrl(url) => {
                     app.auth_url = Some(url);
@@ -128,7 +170,7 @@ async fn run_app(
                 StateUpdateEnum::Playlists(playlists) => {
                     tracing::info!("[main] Playlists received: {} items", playlists.len());
                     app.error_message = None;
-                    app.playlist = Some(playlists.iter().map(|p| p.name.clone()).collect());
+                    app.playlist = Some(playlists);
 
                     // stop polling once we have data
                     // poll_signal_tx.send(false).ok();
@@ -153,6 +195,7 @@ async fn run_app(
 
         terminal.draw(|f| ui::render(f, app))?;
 
+        // EVENT HANDLING
         if event::poll(Duration::from_millis(16))? {
             if let Event::Key(key) = event::read()? {
                 match key.code {

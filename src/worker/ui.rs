@@ -281,15 +281,15 @@ fn render_playlist_panel(f: &mut Frame, app: &AppState, area: Rect) {
         (_, Some(list)) if !list.is_empty() => list
             .iter()
             .enumerate()
-            .map(|(i, name)| {
+            .map(|(i, playlist)| {
                 if i == app.selected_playlist_index {
                     Line::from(Span::styled(
-                        format!(" ▶ {}", name),
+                        format!(" ▶ {} ({})", playlist.name, playlist.id),
                         Style::default().fg(Color::Cyan).bold(),
                     ))
                 } else {
                     Line::from(Span::styled(
-                        format!("   {}", name),
+                        format!("   {} ({})", playlist.name, playlist.id),
                         Style::default().fg(Color::White),
                     ))
                 }

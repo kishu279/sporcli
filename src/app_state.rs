@@ -1,10 +1,10 @@
-use crate::events::message::{AuthState, Device, Track, UserProfile};
+use crate::events::message::{AuthState, Device, Playlist, Track, UserProfile};
 
 pub struct AppState {
     pub auth_url: Option<String>,
     pub status: Option<String>,
     pub volume: Option<u8>,
-    pub playlist: Option<Vec<String>>,
+    pub playlist: Option<Vec<Playlist>>,
     pub search: Option<String>,
     pub music_list: Option<Vec<String>>,
     pub available_devices: Option<Vec<Device>>,

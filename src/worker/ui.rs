@@ -222,26 +222,25 @@ fn render_page_spotify(f: &mut Frame, app: &mut AppState) {
     // Vertical: main panels (top) | bottom bar
     let right_rows = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Min(3),
-            Constraint::Length(3),
-            Constraint::Length(3),
-        ])
+        .constraints([Constraint::Min(3), Constraint::Length(3)])
         .split(cols[1]);
 
-    // Top: 3 panels side by side
+    // Top: left panels | right side panel
     let panel_cols = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(30),
-            Constraint::Percentage(45),
-            Constraint::Percentage(25),
-        ])
+        .constraints([Constraint::Percentage(30), Constraint::Percentage(45), Constraint::Percentage(25)])
         .split(right_rows[0]);
+
+    // Right side: track info (top half) | devices (bottom half)
+    let right_side = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(panel_cols[2]);
 
     render_playlist_panel(f, app, panel_cols[0]);
     render_music_list_panel(f, app, panel_cols[1]);
-    render_track_info_panel(f, app, panel_cols[2]);
+    render_track_info_panel(f, app, right_side[0]);
+    render_device_bar(f, app, right_side[1]);
 
     // Bottom: search box (left) | player bar (right)
     let bottom_cols = Layout::default()
@@ -251,7 +250,6 @@ fn render_page_spotify(f: &mut Frame, app: &mut AppState) {
 
     render_search_box(f, app, bottom_cols[0]);
     render_player_bar(f, app, bottom_cols[1]);
-    render_device_bar(f, app, right_rows[2]);
 
     // --- Bottom: command bar ---
     let cmd_bar = Paragraph::new(Line::from(vec![
@@ -290,12 +288,12 @@ fn render_playlist_panel(f: &mut Frame, app: &mut AppState, area: Rect) {
             .map(|(i, playlist)| {
                 if i == app.selected_playlist_index {
                     Line::from(Span::styled(
-                        format!(" ▶ {} ({})", playlist.name, playlist.id),
+                        format!(" ▶ {}", playlist.name),
                         Style::default().fg(Color::Cyan).bold(),
                     ))
                 } else {
                     Line::from(Span::styled(
-                        format!("   {} ({})", playlist.name, playlist.id),
+                        format!("   {}", playlist.name),
                         Style::default().fg(Color::White),
                     ))
                 }
@@ -335,31 +333,39 @@ fn render_music_list_panel(f: &mut Frame, app: &mut AppState, area: Rect) {
     let visible = inner.height as usize;
     app.visible_rows_musiclist = visible;
 
-    let items: Vec<Line> = match (&app.auth_state, &app.music_list) {
-        (_, Some(list)) if !list.is_empty() => list
-            .iter()
-            .enumerate()
-            .skip(scroll)
-            .take(visible)
-            .map(|(i, name)| {
-                if i == app.selected_music_index {
-                    Line::from(Span::styled(
-                        format!(" ▶ {}", name),
-                        Style::default().fg(Color::Cyan).bold(),
-                    ))
-                } else {
-                    Line::from(Span::styled(
-                        format!("   {}", name),
-                        Style::default().fg(Color::White),
-                    ))
-                }
-            })
-            .collect(),
-        (AuthState::Authenticated, None) => {
-            vec![Line::from(Span::styled(
-                spinner_text(app.tick, "Loading tracks"),
-                Style::default().fg(Color::Yellow),
-            ))]
+    let items: Vec<Line> = match &app.auth_state {
+        AuthState::Authenticated => {
+            let ml = app.active_playlist_id.as_ref().and_then(|id| app.music_list.get(id));
+            match ml {
+                Some(ml) if !ml.items.is_empty() => ml
+                    .items
+                    .values()
+                    .enumerate()
+                    .skip(scroll)
+                    .take(visible)
+                    .map(|(i, track)| {
+                        if i == app.selected_music_index {
+                            Line::from(Span::styled(
+                                format!(" ▶ {}", track.name),
+                                Style::default().fg(Color::Cyan).bold(),
+                            ))
+                        } else {
+                            Line::from(Span::styled(
+                                format!("   {}", track.name),
+                                Style::default().fg(Color::White),
+                            ))
+                        }
+                    })
+                    .collect(),
+                None if app.active_playlist_id.is_some() => vec![Line::from(Span::styled(
+                    spinner_text(app.tick, "Loading tracks"),
+                    Style::default().fg(Color::Yellow),
+                ))],
+                _ => vec![Line::from(Span::styled(
+                    " No tracks",
+                    Style::default().fg(Color::DarkGray),
+                ))],
+            }
         }
         _ => vec![Line::from(Span::styled(
             " No tracks",
@@ -507,13 +513,13 @@ fn render_device_bar(f: &mut Frame, app: &AppState, area: Rect) {
     let inner = block.inner(area);
     f.render_widget(block, area);
 
-    let line = match (&app.auth_state, &app.available_devices) {
-        (_, Some(devices)) if !devices.is_empty() => {
-            let mut spans: Vec<Span> = Vec::new();
-            let devices_len = devices.len();
-            for (i, device) in devices.iter().enumerate() {
+    let lines: Vec<Line> = match (&app.auth_state, &app.available_devices) {
+        (_, Some(devices)) if !devices.is_empty() => devices
+            .iter()
+            .enumerate()
+            .map(|(i, device)| {
                 let marker = if device.is_active { "●" } else { "○" };
-                let text = format!("{} {}", marker, device.name);
+                let text = format!(" {} {}", marker, device.name);
                 let style = if i == app.selected_device_index {
                     match app.focus {
                         Focus::Devices => Style::default().fg(Color::Cyan).bold(),
@@ -522,31 +528,18 @@ fn render_device_bar(f: &mut Frame, app: &AppState, area: Rect) {
                 } else {
                     Style::default().fg(Color::White)
                 };
-
-                spans.push(Span::styled(text, style));
-                if i + 1 < devices_len {
-                    spans.push(Span::styled(
-                        "   |   ",
-                        Style::default().fg(Color::DarkGray),
-                    ));
-                }
-            }
-            Line::from(spans)
-        }
-        (AuthState::Authenticated, None) => Line::from(Span::styled(
+                Line::from(Span::styled(text, style))
+            })
+            .collect(),
+        (AuthState::Authenticated, None) => vec![Line::from(Span::styled(
             spinner_text(app.tick, "Loading devices"),
             Style::default().fg(Color::Yellow),
-        )),
-        _ => Line::from(Span::styled(
+        ))],
+        _ => vec![Line::from(Span::styled(
             " No devices",
             Style::default().fg(Color::DarkGray),
-        )),
+        ))],
     };
 
-    f.render_widget(
-        Paragraph::new(line)
-            .alignment(Alignment::Left)
-            .wrap(Wrap { trim: true }),
-        inner,
-    );
+    f.render_widget(Paragraph::new(lines).alignment(Alignment::Left), inner);
 }

@@ -175,15 +175,10 @@ async fn run_app(
                     // stop polling once we have data
                     // poll_signal_tx.send(false).ok();
                 }
-                StateUpdateEnum::TrackList(tracks) => {
-                    tracing::info!("[main] TrackList received: {} items", tracks.len());
+                 StateUpdateEnum::TrackList(playlist_id, music_list) => {
+                    tracing::info!("[main] TrackList received for {}: {} items", playlist_id, music_list.items.len());
                     app.error_message = None;
-                    app.music_list = Some(
-                        tracks
-                            .iter()
-                            .map(|t| format!("{} - {}", t.name, t.artist))
-                            .collect(),
-                    );
+                    app.music_list.insert(playlist_id, music_list);
                 }
                 StateUpdateEnum::UserProfile(profile) => {
                     tracing::info!("[main] UserProfile received: {:?}", profile.display_name);
@@ -253,7 +248,9 @@ async fn run_app(
                             }
                         }
                         Focus::MusicList => {
-                            let len = app.music_list.as_ref().map_or(0, |m| m.len());
+                            let len = app.active_playlist_id.as_ref()
+                                .and_then(|id| app.music_list.get(id))
+                                .map_or(0, |m| m.items.len());
                             if len > 0 && app.selected_music_index < len - 1 {
                                 app.selected_music_index += 1;
                             }
@@ -292,15 +289,32 @@ async fn run_app(
                         }
                     }
                     KeyCode::Enter => {
-                        if let Focus::Devices = app.focus {
-                            if let Some(devices) = app.available_devices.as_ref() {
-                                if let Some(device) = devices.get(app.selected_device_index) {
-                                    tracing::info!("[main] ChangeDevice requested: {}", device.id);
-                                    action_tx
-                                        .try_send(Action::ChangeDevice(device.id.clone()))
-                                        .ok();
+                        match app.focus {
+                            Focus::Playlist => {
+                                if let Some(playlists) = app.playlist.as_ref() {
+                                    if let Some(playlist) = playlists.get(app.selected_playlist_index) {
+                                        let id = playlist.id.clone();
+                                        app.active_playlist_id = Some(id.clone());
+                                        app.selected_music_index = 0;
+                                        app.musiclist_scroll_offset = 0;
+                                        if !app.music_list.contains_key(&id) {
+                                            tracing::info!("[main] GetPlaylistTracks requested: {}", id);
+                                            action_tx.try_send(Action::GetPlaylistTracks(id)).ok();
+                                        }
+                                    }
                                 }
                             }
+                            Focus::Devices => {
+                                if let Some(devices) = app.available_devices.as_ref() {
+                                    if let Some(device) = devices.get(app.selected_device_index) {
+                                        tracing::info!("[main] ChangeDevice requested: {}", device.id);
+                                        action_tx
+                                            .try_send(Action::ChangeDevice(device.id.clone()))
+                                            .ok();
+                                    }
+                                }
+                            }
+                            _ => {}
                         }
                     }
                     KeyCode::Char(' ') => {

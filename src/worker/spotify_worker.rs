@@ -193,6 +193,21 @@ pub async fn spotify_worker(
                     }
                 }
             }
+            Some(Action::GetPlaylistTracks(playlist_id)) => {
+                tracing::info!("[worker] Action: GetPlaylistTracks -> {}", playlist_id);
+                match spotify_client.get_tracks(&playlist_id).await {
+                    Ok(tracks) => {
+                        state_tx.send(StateUpdateEnum::TrackList(playlist_id, tracks)).await.ok();
+                    }
+                    Err(e) => {
+                        tracing::error!("[worker] GetPlaylistTracks failed: {}", e);
+                        state_tx
+                            .send(StateUpdateEnum::Error(format!("Failed to get tracks: {}", e)))
+                            .await
+                            .ok();
+                    }
+                }
+            }
             Some(Action::GetLikedSongs) => {
                 // Feb 2026: GET /v1/me/tracks removed in dev mode
                 tracing::warn!("[worker] GetLikedSongs skipped - endpoint removed in Feb 2026");
@@ -202,7 +217,6 @@ pub async fn spotify_worker(
                 match spotify_client.search(&query).await {
                     Ok(tracks) => {
                         tracing::info!("[worker] Search returned {} tracks", tracks.len());
-                        state_tx.send(StateUpdateEnum::TrackList(tracks)).await.ok();
                     }
                     Err(e) => {
                         tracing::error!("[worker] Search failed: {}", e);
@@ -238,6 +252,7 @@ pub async fn spotify_worker(
                     }
                 }
             }
+            
             Some(other) => {
                 tracing::debug!("[worker] Unhandled action: {:?}", other);
             }

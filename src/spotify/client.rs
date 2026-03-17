@@ -1,5 +1,6 @@
 use crate::spotify::auth_handler;
 use crate::storage;
+use indexmap::IndexMap;
 
 const BASE_URL: &str = "https://api.spotify.com";
 
@@ -343,6 +344,68 @@ impl SpotifyClient {
         Ok(playlists)
     }
 
+    pub async fn get_tracks(
+        &self,
+        playlist_id: &str,
+    ) -> Result<crate::events::message::MusicList, Box<dyn std::error::Error + Send + Sync>> {
+        let endpoint = format!("/v1/playlists/{}", playlist_id);
+        tracing::trace!("[api] → GET {}{}", BASE_URL, endpoint);
+
+        let res = self
+            .http
+            .get(format!("{}{}", BASE_URL, endpoint))
+            .bearer_auth(self.token()?)
+            .send()
+            .await?;
+
+        let status = res.status();
+        let body = res.text().await.unwrap_or_default();
+        Self::handle_response_status(status, &endpoint, body.clone())?;
+        
+        tracing::info!("[api] get_tracks response length: {} bytes", body.len());
+        
+        let data: serde_json::Value = serde_json::from_str(&body)?;
+
+        let mut items: IndexMap<String, crate::events::message::TrackItem> = IndexMap::new();
+        
+        if let Some(items_obj) = data.get("items") {
+            if let Some(arr) = items_obj.get("items").and_then(|v| v.as_array()) {
+                tracing::info!("[api] Found {} track entries", arr.len());
+                for entry in arr {
+                    if let Some(track) = entry.get("item") {
+                        let id = track["id"].as_str().unwrap_or("").to_string();
+                        items.insert(id.clone(), crate::events::message::TrackItem {
+                            id,
+                            name: track["name"].as_str().unwrap_or("Unknown").to_string(),
+                            artist: track["artists"][0]["name"]
+                                .as_str()
+                                .unwrap_or("Unknown")
+                                .to_string(),
+                            album: track["album"]["name"]
+                                .as_str()
+                                .unwrap_or("Unknown")
+                                .to_string(),
+                            duration_ms: track["duration_ms"].as_u64().unwrap_or(0),
+                            uri: track["uri"].as_str().unwrap_or("").to_string(),
+                        });
+                    }
+                }
+            } else {
+                tracing::warn!("[api] items.items is not an array");
+            }
+        } else {
+            tracing::warn!("[api] No 'items' field in response");
+        }
+
+        tracing::info!("[api] Parsed {} tracks", items.len());
+
+        Ok(crate::events::message::MusicList {
+            total: data["items"]["total"].as_u64().unwrap_or(0) as usize,
+            next: data["items"]["next"].as_str().map(|s| s.to_string()),
+            items,
+        })
+    }
+
     // ── Devices ────────────────────────────────────────────────
 
     pub async fn get_available_devices(
@@ -417,15 +480,6 @@ impl SpotifyClient {
         let body = res.text().await.unwrap_or_default();
         Self::handle_response_status(status, endpoint, body)?;
         Ok(())
-    }
-    // ── Liked Songs ────────────────────────────────────────────
-    // NOTE: GET /v1/me/tracks removed in Feb 2026 dev mode migration.
-    // Use GET /me/library/contains or extended quota mode to restore this.
-    pub async fn get_liked_songs(
-        &self,
-    ) -> Result<Vec<crate::events::message::Track>, Box<dyn std::error::Error + Send + Sync>> {
-        tracing::warn!("[api] get_liked_songs: /v1/me/tracks removed in Feb 2026 dev mode");
-        Err("Liked songs endpoint removed in dev mode (Feb 2026 migration)".into())
     }
 
     // ── Search ─────────────────────────────────────────────────

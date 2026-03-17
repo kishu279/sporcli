@@ -2122,6 +2122,7 @@ dependencies = [
  "base64 0.21.7",
  "chrono",
  "crossterm",
+ "indexmap",
  "rand",
  "ratatui",
  "reqwest",

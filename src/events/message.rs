@@ -1,3 +1,5 @@
+use indexmap::IndexMap;
+
 // ACTIONS to SPOTIFY
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -13,6 +15,7 @@ pub enum Action {
     VolumeDown,
     GetPlaylists,
     GetLikedSongs,
+    GetPlaylistTracks(String),
     Search(String),
     GetProfile,
     CC,
@@ -28,7 +31,7 @@ pub enum StateUpdateEnum {
     Devices(Vec<Device>),
     Playlists(Vec<Playlist>),
     TrackInfo(Track),
-    TrackList(Vec<Track>),
+    TrackList(String, MusicList),
     CopyUrl(String),
     UserProfile(UserProfile),
     Error(String),
@@ -49,6 +52,23 @@ pub struct Track {
     pub album: String,
     pub duration_ms: u64,
     pub progress_ms: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct TrackItem {
+    pub id: String,
+    pub name: String,
+    pub artist: String,
+    pub album: String,
+    pub duration_ms: u64,
+    pub uri: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct MusicList {
+    pub items: IndexMap<String, TrackItem>,
+    pub total: usize,
+    pub next: Option<String>,
 }
 
 #[derive(Debug, Clone)]

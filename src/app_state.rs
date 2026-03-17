@@ -1,4 +1,5 @@
-use crate::events::message::{AuthState, Device, Playlist, Track, UserProfile};
+use std::collections::HashMap;
+use crate::events::message::{AuthState, Device, MusicList, Playlist, Track, UserProfile};
 
 pub struct AppState {
     pub auth_url: Option<String>,
@@ -6,7 +7,8 @@ pub struct AppState {
     pub volume: Option<u8>,
     pub playlist: Option<Vec<Playlist>>,
     pub search: Option<String>,
-    pub music_list: Option<Vec<String>>,
+    pub music_list: HashMap<String, MusicList>,
+    pub active_playlist_id: Option<String>,
     pub available_devices: Option<Vec<Device>>,
 
     pub auth_state: AuthState,             // From events::AuthState
@@ -14,12 +16,12 @@ pub struct AppState {
     pub user_profile: Option<UserProfile>, // From events::UserProfile
     pub is_playing: bool,
     pub focus: Focus,
-    pub selected_playlist_index: usize,
-
+    
     pub tick: usize,
     pub error_message: Option<String>,
-
+    
     // SELECTED INDEX ON LIST
+    pub selected_playlist_index: usize,
     pub selected_music_index: usize,
     pub selected_device_index: usize,
     // SCROLL
@@ -37,6 +39,7 @@ pub enum Focus {
     Devices,
 }
 
+
 impl AppState {
     pub fn new() -> AppState {
         AppState {
@@ -45,7 +48,8 @@ impl AppState {
             user_profile: None,
             error_message: None,
             is_playing: false,
-            music_list: None,
+            music_list: HashMap::new(),
+            active_playlist_id: None,
             available_devices: None,
             playlist: None,
             search: None,

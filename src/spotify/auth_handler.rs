@@ -9,6 +9,7 @@ use std::net::TcpListener;
 
 pub const REQUIRED_SCOPES: &[&str] = &[
     "playlist-read-private",
+    "playlist-read-collaborative",
     "user-library-read",
     "user-read-currently-playing",
     "user-modify-playback-state",

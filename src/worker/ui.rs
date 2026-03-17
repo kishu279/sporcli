@@ -17,7 +17,7 @@ fn spinner_text(tick: usize, label: &str) -> String {
     format!(" {} {}...", ch, label)
 }
 
-pub fn render(f: &mut Frame, app: &AppState) {
+pub fn render(f: &mut Frame, app: &mut AppState) {
     match &app.auth_state {
         AuthState::Authenticated => {
             // User is logged in, show the player
@@ -146,7 +146,7 @@ fn render_main_screen(
     }
 }
 
-fn render_page_spotify(f: &mut Frame, app: &AppState) {
+fn render_page_spotify(f: &mut Frame, app: &mut AppState) {
     let area = f.area();
 
     // If there's an error message, show it in a banner at the top
@@ -268,7 +268,7 @@ fn render_page_spotify(f: &mut Frame, app: &AppState) {
 }
 
 // ── Panel: Playlist ──────────────────────────────────────────────────────────
-fn render_playlist_panel(f: &mut Frame, app: &AppState, area: Rect) {
+fn render_playlist_panel(f: &mut Frame, app: &mut AppState, area: Rect) {
     let block = Block::default()
         .borders(Borders::ALL)
         .style(Style::new().white().on_black())
@@ -277,10 +277,16 @@ fn render_playlist_panel(f: &mut Frame, app: &AppState, area: Rect) {
     let inner = block.inner(area);
     f.render_widget(block, area);
 
+    let scroll = app.playlist_scroll_offset;
+    let visible_height = inner.height as usize;
+    app.visible_rows_playlist = visible_height.clone();
+
     let items: Vec<Line> = match (&app.auth_state, &app.playlist) {
         (_, Some(list)) if !list.is_empty() => list
             .iter()
             .enumerate()
+            .skip(scroll)
+            .take(visible_height)
             .map(|(i, playlist)| {
                 if i == app.selected_playlist_index {
                     Line::from(Span::styled(
@@ -313,7 +319,7 @@ fn render_playlist_panel(f: &mut Frame, app: &AppState, area: Rect) {
 }
 
 // ── Panel: Music List ─────────────────────────────────────────────────────────
-fn render_music_list_panel(f: &mut Frame, app: &AppState, area: Rect) {
+fn render_music_list_panel(f: &mut Frame, app: &mut AppState, area: Rect) {
     let block = Block::default()
         .borders(Borders::ALL)
         .style(Style::new().white().on_black())
@@ -325,10 +331,16 @@ fn render_music_list_panel(f: &mut Frame, app: &AppState, area: Rect) {
     let inner = block.inner(area);
     f.render_widget(block, area);
 
+    let scroll = app.musiclist_scroll_offset;
+    let visible = inner.height as usize;
+    app.visible_rows_musiclist = visible;
+
     let items: Vec<Line> = match (&app.auth_state, &app.music_list) {
         (_, Some(list)) if !list.is_empty() => list
             .iter()
             .enumerate()
+            .skip(scroll)
+            .take(visible)
             .map(|(i, name)| {
                 if i == app.selected_music_index {
                     Line::from(Span::styled(

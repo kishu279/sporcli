@@ -15,11 +15,18 @@ pub struct AppState {
     pub is_playing: bool,
     pub focus: Focus,
     pub selected_playlist_index: usize,
-    pub selected_music_index: usize,
-    pub selected_device_index: usize,
 
     pub tick: usize,
     pub error_message: Option<String>,
+
+    // SELECTED INDEX ON LIST
+    pub selected_music_index: usize,
+    pub selected_device_index: usize,
+    // SCROLL
+    pub playlist_scroll_offset: usize,
+    pub musiclist_scroll_offset: usize,
+    pub visible_rows_playlist: usize,
+    pub visible_rows_musiclist: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -50,6 +57,10 @@ impl AppState {
             selected_music_index: 0,
             selected_device_index: 0,
             tick: 0,
+            playlist_scroll_offset: 0,
+            visible_rows_playlist: 0,
+            musiclist_scroll_offset: 0,
+            visible_rows_musiclist: 0,
         }
     }
 

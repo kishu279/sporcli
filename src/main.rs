@@ -223,6 +223,10 @@ async fn run_app(
                         Focus::Playlist => {
                             if app.selected_playlist_index > 0 {
                                 app.selected_playlist_index -= 1;
+
+                                if app.selected_playlist_index < app.playlist_scroll_offset {
+                                    app.playlist_scroll_offset = app.selected_playlist_index;
+                                }
                             }
                         }
                         Focus::MusicList => {
@@ -238,6 +242,14 @@ async fn run_app(
                             let len = app.playlist.as_ref().map_or(0, |p| p.len());
                             if len > 0 && app.selected_playlist_index < len - 1 {
                                 app.selected_playlist_index += 1;
+
+                                let visible_rows = app.visible_rows_playlist;
+                                if app.selected_playlist_index
+                                    >= app.playlist_scroll_offset + visible_rows
+                                {
+                                    app.playlist_scroll_offset =
+                                        app.selected_playlist_index - visible_rows + 1;
+                                }
                             }
                         }
                         Focus::MusicList => {

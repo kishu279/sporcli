@@ -183,15 +183,39 @@ impl SpotifyClient {
 
     pub async fn play(&self, uri: String) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let endpoint = "/v1/me/player/play";
-        tracing::trace!("[api] → PUT {}{}  body: (empty)", BASE_URL, endpoint);
-        let res = self
-            .http
-            .put(format!("{}{}", BASE_URL, endpoint))
-            .bearer_auth(self.token()?)
-            .header("Content-Length", "0")
-            .body("")
-            .send()
-            .await?;
+
+        let res = match uri.is_empty() {
+            true => {
+                tracing::trace!("[api] → PUT {}{}  body: (empty)", BASE_URL, endpoint);
+
+                self.http
+                    .put(format!("{}{}", BASE_URL, endpoint))
+                    .bearer_auth(self.token()?)
+                    .header("Content-Length", "0")
+                    .body("")
+                    .send()
+                    .await?
+            }
+            false => {
+                let json_body = serde_json::json!({
+                    "uris": [format!("spotify:track:{uri    }")]
+                });
+                tracing::info!(
+                    "[api] → PUT {}{}  body: {:?}",
+                    BASE_URL,
+                    endpoint,
+                    json_body
+                );
+
+                self.http
+                    .put(format!("{}{}", BASE_URL, endpoint))
+                    .bearer_auth(self.token()?)
+                    .json(&json_body)
+                    .send()
+                    .await?
+            }
+        };
+
         let status = res.status();
         let body = res.text().await.unwrap_or_default();
         Self::handle_response_status(status, endpoint, body)?;

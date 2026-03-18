@@ -17,7 +17,7 @@ use crossterm::{
 use ratatui::{Terminal, backend::CrosstermBackend};
 use std::io;
 // use std::time::Duration;
-use tokio::time::{Duration, timeout};
+use tokio::time::{Duration, sleep, timeout};
 
 #[tokio::main]
 async fn main() -> Result<(), io::Error> {
@@ -257,6 +257,17 @@ async fn run_app(
                             if app.selected_music_index < app.musiclist_scroll_offset {
                                 app.musiclist_scroll_offset = app.selected_music_index;
                             }
+
+                            // Update selected track ID
+                            if let Some(playlist_id) = app.active_playlist_id.as_ref() {
+                                if let Some(music_list) = app.music_list.get(playlist_id) {
+                                    if let Some((_, track)) =
+                                        music_list.items.iter().nth(app.selected_music_index)
+                                    {
+                                        app.selected_track_id = Some(track.id.clone());
+                                    }
+                                }
+                            }
                         }
                         Focus::Search => {}
                         Focus::Devices => {}
@@ -314,6 +325,17 @@ async fn run_app(
                                 {
                                     app.musiclist_scroll_offset =
                                         app.selected_music_index - visible_rows + 1;
+                                }
+                            }
+
+                            // Update selected track ID
+                            if let Some(playlist_id) = app.active_playlist_id.as_ref() {
+                                if let Some(music_list) = app.music_list.get(playlist_id) {
+                                    if let Some((_, track)) =
+                                        music_list.items.iter().nth(app.selected_music_index)
+                                    {
+                                        app.selected_track_id = Some(track.id.clone());
+                                    }
                                 }
                             }
                         }
@@ -382,16 +404,22 @@ async fn run_app(
                         _ => {}
                     },
                     KeyCode::Char(' ') => {
-                        if app.focus != Focus::MusicList {
+                        tracing::info!("Clicked Space to fetch the selected music");
+                        if app.focus == Focus::MusicList {
+                            // made an action to play of selected music
+                            if let Some(track_id) = &app.selected_track_id {
+                                tracing::info!("sending the requyest to play {track_id}");
+
+                                action_tx
+                                    .try_send(Action::Play(Some(track_id.to_string())))
+                                    .ok();
+                            }
+                        } else {
                             if app.is_playing {
                                 action_tx.try_send(Action::Pause).ok();
                             } else {
                                 action_tx.try_send(Action::Play(None)).ok();
                             }
-                        } else {
-                            // made an action to play of selected music
-
-                            action_tx.try_send(Action::Play(None)).ok();
                         }
                     }
                     _ => {}

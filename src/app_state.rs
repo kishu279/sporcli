@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use crate::events::message::{AuthState, Device, MusicList, Playlist, Track, UserProfile};
+use std::collections::HashMap;
 
 pub struct AppState {
     pub auth_url: Option<String>,
@@ -9,6 +9,7 @@ pub struct AppState {
     pub search: Option<String>,
     pub music_list: HashMap<String, MusicList>,
     pub active_playlist_id: Option<String>,
+    pub selected_track_id: Option<String>,
     pub available_devices: Option<Vec<Device>>,
 
     pub auth_state: AuthState,             // From events::AuthState
@@ -16,10 +17,10 @@ pub struct AppState {
     pub user_profile: Option<UserProfile>, // From events::UserProfile
     pub is_playing: bool,
     pub focus: Focus,
-    
+
     pub tick: usize,
     pub error_message: Option<String>,
-    
+
     // SELECTED INDEX ON LIST
     pub selected_playlist_index: usize,
     pub selected_music_index: usize,
@@ -39,7 +40,6 @@ pub enum Focus {
     Devices,
 }
 
-
 impl AppState {
     pub fn new() -> AppState {
         AppState {
@@ -50,6 +50,7 @@ impl AppState {
             is_playing: false,
             music_list: HashMap::new(),
             active_playlist_id: None,
+            selected_track_id: None,
             available_devices: None,
             playlist: None,
             search: None,
@@ -76,4 +77,10 @@ impl AppState {
     pub fn reset_tick(&mut self) {
         self.tick = 0;
     }
+}
+
+#[derive(serde::Serialize)]
+pub struct PlayRequest {
+    pub uris: Vec<String>,
+    // pub position_ms: Option<u64>,
 }

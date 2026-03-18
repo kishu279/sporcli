@@ -24,9 +24,9 @@ pub async fn spotify_worker(
                         .ok();
                 }
             }
-            Some(Action::Play) => {
+            Some(Action::Play(Some(track_id))) => {
                 tracing::info!("[worker] Action: Play");
-                if let Err(e) = spotify_client.play().await {
+                if let Err(e) = spotify_client.play(track_id.to_string()).await {
                     tracing::error!("[worker] Play failed: {}", e);
                     state_tx
                         .send(StateUpdateEnum::Error(format!("Play failed: {}", e)))
@@ -197,12 +197,18 @@ pub async fn spotify_worker(
                 tracing::info!("[worker] Action: GetPlaylistTracks -> {}", playlist_id);
                 match spotify_client.get_tracks(&playlist_id).await {
                     Ok(tracks) => {
-                        state_tx.send(StateUpdateEnum::TrackList(playlist_id, tracks)).await.ok();
+                        state_tx
+                            .send(StateUpdateEnum::TrackList(playlist_id, tracks))
+                            .await
+                            .ok();
                     }
                     Err(e) => {
                         tracing::error!("[worker] GetPlaylistTracks failed: {}", e);
                         state_tx
-                            .send(StateUpdateEnum::Error(format!("Failed to get tracks: {}", e)))
+                            .send(StateUpdateEnum::Error(format!(
+                                "Failed to get tracks: {}",
+                                e
+                            )))
                             .await
                             .ok();
                     }
@@ -252,7 +258,7 @@ pub async fn spotify_worker(
                     }
                 }
             }
-            
+
             Some(other) => {
                 tracing::debug!("[worker] Unhandled action: {:?}", other);
             }

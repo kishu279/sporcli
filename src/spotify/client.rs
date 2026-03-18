@@ -181,7 +181,7 @@ impl SpotifyClient {
     // function calls
     // ── Playback Controls ──────────────────────────────────────
 
-    pub async fn play(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn play(&self, uri: String) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let endpoint = "/v1/me/player/play";
         tracing::trace!("[api] → PUT {}{}  body: (empty)", BASE_URL, endpoint);
         let res = self
@@ -361,33 +361,36 @@ impl SpotifyClient {
         let status = res.status();
         let body = res.text().await.unwrap_or_default();
         Self::handle_response_status(status, &endpoint, body.clone())?;
-        
+
         tracing::info!("[api] get_tracks response length: {} bytes", body.len());
-        
+
         let data: serde_json::Value = serde_json::from_str(&body)?;
 
         let mut items: IndexMap<String, crate::events::message::TrackItem> = IndexMap::new();
-        
+
         if let Some(items_obj) = data.get("items") {
             if let Some(arr) = items_obj.get("items").and_then(|v| v.as_array()) {
                 tracing::info!("[api] Found {} track entries", arr.len());
                 for entry in arr {
                     if let Some(track) = entry.get("item") {
                         let id = track["id"].as_str().unwrap_or("").to_string();
-                        items.insert(id.clone(), crate::events::message::TrackItem {
-                            id,
-                            name: track["name"].as_str().unwrap_or("Unknown").to_string(),
-                            artist: track["artists"][0]["name"]
-                                .as_str()
-                                .unwrap_or("Unknown")
-                                .to_string(),
-                            album: track["album"]["name"]
-                                .as_str()
-                                .unwrap_or("Unknown")
-                                .to_string(),
-                            duration_ms: track["duration_ms"].as_u64().unwrap_or(0),
-                            uri: track["uri"].as_str().unwrap_or("").to_string(),
-                        });
+                        items.insert(
+                            id.clone(),
+                            crate::events::message::TrackItem {
+                                id,
+                                name: track["name"].as_str().unwrap_or("Unknown").to_string(),
+                                artist: track["artists"][0]["name"]
+                                    .as_str()
+                                    .unwrap_or("Unknown")
+                                    .to_string(),
+                                album: track["album"]["name"]
+                                    .as_str()
+                                    .unwrap_or("Unknown")
+                                    .to_string(),
+                                duration_ms: track["duration_ms"].as_u64().unwrap_or(0),
+                                uri: track["uri"].as_str().unwrap_or("").to_string(),
+                            },
+                        );
                     }
                 }
             } else {

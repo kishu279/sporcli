@@ -31,7 +31,7 @@ pub struct AppState {
     pub visible_rows_musiclist: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Focus {
     Playlist,
     Search,

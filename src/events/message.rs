@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 #[derive(Debug, Clone)]
 pub enum Action {
     Authenticate,
-    Play,
+    Play(Option<String>),
     Pause,
     GetCurrentTrack,
     GetDevices,
@@ -18,7 +18,6 @@ pub enum Action {
     GetPlaylistTracks(String),
     Search(String),
     GetProfile,
-    CC,
     Quit,
 }
 

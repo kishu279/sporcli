@@ -267,9 +267,14 @@ fn render_page_spotify(f: &mut Frame, app: &mut AppState) {
 
 // ── Panel: Playlist ──────────────────────────────────────────────────────────
 fn render_playlist_panel(f: &mut Frame, app: &mut AppState, area: Rect) {
+    let border_color = match app.focus {
+        Focus::Playlist => Color::Yellow,
+        _ => Color::White,
+    };
+
     let block = Block::default()
         .borders(Borders::ALL)
-        .style(Style::new().white().on_black())
+        .style(Style::new().fg(border_color).on_black())
         .title(Span::styled(" Playlist ", Style::default().fg(Color::Cyan)));
 
     let inner = block.inner(area);
@@ -318,9 +323,14 @@ fn render_playlist_panel(f: &mut Frame, app: &mut AppState, area: Rect) {
 
 // ── Panel: Music List ─────────────────────────────────────────────────────────
 fn render_music_list_panel(f: &mut Frame, app: &mut AppState, area: Rect) {
+    let border_color = match app.focus {
+        Focus::MusicList => Color::Yellow,
+        _ => Color::White,
+    };
+
     let block = Block::default()
         .borders(Borders::ALL)
-        .style(Style::new().white().on_black())
+        .style(Style::new().fg(border_color).on_black())
         .title(Span::styled(
             " Music List ",
             Style::default().fg(Color::Cyan),
@@ -344,14 +354,15 @@ fn render_music_list_panel(f: &mut Frame, app: &mut AppState, area: Rect) {
                     .skip(scroll)
                     .take(visible)
                     .map(|(i, track)| {
+                        let display = format!("{} - {} [{}]", track.name, track.artist, track.id);
                         if i == app.selected_music_index {
                             Line::from(Span::styled(
-                                format!(" ▶ {}", track.name),
+                                format!(" ▶ {}", display),
                                 Style::default().fg(Color::Cyan).bold(),
                             ))
                         } else {
                             Line::from(Span::styled(
-                                format!("   {}", track.name),
+                                format!("   {}", display),
                                 Style::default().fg(Color::White),
                             ))
                         }
@@ -437,9 +448,14 @@ fn render_track_info_panel(f: &mut Frame, app: &AppState, area: Rect) {
 
 // ── Bottom: Search Box ────────────────────────────────────────────────────────
 fn render_search_box(f: &mut Frame, app: &AppState, area: Rect) {
+    let border_color = match app.focus {
+        Focus::Search => Color::Yellow,
+        _ => Color::White,
+    };
+
     let block = Block::default()
         .borders(Borders::ALL)
-        .style(Style::new().white().on_black());
+        .style(Style::new().fg(border_color).on_black());
 
     let inner = block.inner(area);
     f.render_widget(block, area);
@@ -505,9 +521,14 @@ fn render_player_bar(f: &mut Frame, app: &AppState, area: Rect) {
 
 // ── Bottom: Device Status Bar ────────────────────────────────────────────────
 fn render_device_bar(f: &mut Frame, app: &AppState, area: Rect) {
+    let border_color = match app.focus {
+        Focus::Devices => Color::Yellow,
+        _ => Color::White,
+    };
+
     let block = Block::default()
         .borders(Borders::ALL)
-        .style(Style::new().white().on_black())
+        .style(Style::new().fg(border_color).on_black())
         .title(Span::styled(" Devices ", Style::default().fg(Color::Cyan)));
 
     let inner = block.inner(area);

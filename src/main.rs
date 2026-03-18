@@ -102,7 +102,7 @@ async fn run_app(
                     app.current_track_info = Some(track);
                     app.is_playing = true;
 
-                    match timeout(Duration::from_secs(5), async {
+                    match timeout(Duration::from_secs(10), async {
                         action_tx.try_send(Action::GetCurrentTrack).ok();
                     })
                     .await
@@ -127,7 +127,7 @@ async fn run_app(
                         app.selected_device_index = len - 1;
                     }
 
-                    match timeout(Duration::from_secs(10), async {
+                    match timeout(Duration::from_secs(15), async {
                         action_tx.try_send(Action::GetDevices).ok();
                     })
                     .await
@@ -175,8 +175,12 @@ async fn run_app(
                     // stop polling once we have data
                     // poll_signal_tx.send(false).ok();
                 }
-                 StateUpdateEnum::TrackList(playlist_id, music_list) => {
-                    tracing::info!("[main] TrackList received for {}: {} items", playlist_id, music_list.items.len());
+                StateUpdateEnum::TrackList(playlist_id, music_list) => {
+                    tracing::info!(
+                        "[main] TrackList received for {}: {} items",
+                        playlist_id,
+                        music_list.items.len()
+                    );
                     app.error_message = None;
                     app.music_list.insert(playlist_id, music_list);
                 }
@@ -219,14 +223,39 @@ async fn run_app(
                             if app.selected_playlist_index > 0 {
                                 app.selected_playlist_index -= 1;
 
+                                // calculaing the scroll and updating
                                 if app.selected_playlist_index < app.playlist_scroll_offset {
                                     app.playlist_scroll_offset = app.selected_playlist_index;
+                                }
+
+                                // getting the musics list from the playlists
+                                if let Some(playlists) = app.playlist.as_ref() {
+                                    if let Some(playlist) =
+                                        playlists.get(app.selected_playlist_index)
+                                    {
+                                        let id = playlist.id.clone();
+                                        app.active_playlist_id = Some(id.clone());
+                                        app.selected_music_index = 0;
+                                        app.musiclist_scroll_offset = 0;
+                                        if !app.music_list.contains_key(&id) {
+                                            tracing::info!(
+                                                "[main] GetPlaylistTracks requested: {}",
+                                                id
+                                            );
+                                            action_tx.try_send(Action::GetPlaylistTracks(id)).ok();
+                                        }
+                                    }
                                 }
                             }
                         }
                         Focus::MusicList => {
                             if app.selected_music_index > 0 {
                                 app.selected_music_index -= 1;
+                            }
+
+                            // calculaing the scroll and updating
+                            if app.selected_music_index < app.musiclist_scroll_offset {
+                                app.musiclist_scroll_offset = app.selected_music_index;
                             }
                         }
                         Focus::Search => {}
@@ -238,6 +267,7 @@ async fn run_app(
                             if len > 0 && app.selected_playlist_index < len - 1 {
                                 app.selected_playlist_index += 1;
 
+                                // calculating the scroll and then updating
                                 let visible_rows = app.visible_rows_playlist;
                                 if app.selected_playlist_index
                                     >= app.playlist_scroll_offset + visible_rows
@@ -245,14 +275,46 @@ async fn run_app(
                                     app.playlist_scroll_offset =
                                         app.selected_playlist_index - visible_rows + 1;
                                 }
+
+                                // getting the music list on down
+                                if let Some(playlists) = app.playlist.as_ref() {
+                                    if let Some(playlist) =
+                                        playlists.get(app.selected_playlist_index)
+                                    {
+                                        let id = playlist.id.clone();
+                                        app.active_playlist_id = Some(id.clone());
+                                        app.selected_music_index = 0;
+                                        app.musiclist_scroll_offset = 0;
+                                        if !app.music_list.contains_key(&id) {
+                                            tracing::info!(
+                                                "[main] GetPlaylistTracks requested: {}",
+                                                id
+                                            );
+                                            action_tx.try_send(Action::GetPlaylistTracks(id)).ok();
+                                        }
+                                    }
+                                }
                             }
                         }
                         Focus::MusicList => {
-                            let len = app.active_playlist_id.as_ref()
+                            let len = app
+                                .active_playlist_id
+                                .as_ref()
                                 .and_then(|id| app.music_list.get(id))
                                 .map_or(0, |m| m.items.len());
                             if len > 0 && app.selected_music_index < len - 1 {
                                 app.selected_music_index += 1;
+                            }
+
+                            if len > 0 && app.selected_music_index < len - 1 {
+                                // calculating the scroll and then updating
+                                let visible_rows = app.visible_rows_musiclist;
+                                if app.selected_music_index
+                                    >= app.musiclist_scroll_offset + visible_rows
+                                {
+                                    app.musiclist_scroll_offset =
+                                        app.selected_music_index - visible_rows + 1;
+                                }
                             }
                         }
                         Focus::Search => {}
@@ -288,40 +350,48 @@ async fn run_app(
                             action_tx.try_send(Action::NextTrack).ok();
                         }
                     }
-                    KeyCode::Enter => {
-                        match app.focus {
-                            Focus::Playlist => {
-                                if let Some(playlists) = app.playlist.as_ref() {
-                                    if let Some(playlist) = playlists.get(app.selected_playlist_index) {
-                                        let id = playlist.id.clone();
-                                        app.active_playlist_id = Some(id.clone());
-                                        app.selected_music_index = 0;
-                                        app.musiclist_scroll_offset = 0;
-                                        if !app.music_list.contains_key(&id) {
-                                            tracing::info!("[main] GetPlaylistTracks requested: {}", id);
-                                            action_tx.try_send(Action::GetPlaylistTracks(id)).ok();
-                                        }
-                                    }
-                                }
-                            }
-                            Focus::Devices => {
-                                if let Some(devices) = app.available_devices.as_ref() {
-                                    if let Some(device) = devices.get(app.selected_device_index) {
-                                        tracing::info!("[main] ChangeDevice requested: {}", device.id);
-                                        action_tx
-                                            .try_send(Action::ChangeDevice(device.id.clone()))
-                                            .ok();
-                                    }
-                                }
-                            }
-                            _ => {}
+                    KeyCode::Enter => match app.focus {
+                        Focus::Playlist => {
+                            // NOT REQUIRED WHILE PRESSING ENTERING
+                            // if let Some(playlists) = app.playlist.as_ref() {
+                            //     if let Some(playlist) = playlists.get(app.selected_playlist_index) {
+                            //         let id = playlist.id.clone();
+                            //         app.active_playlist_id = Some(id.clone());
+                            //         app.selected_music_index = 0;
+                            //         app.musiclist_scroll_offset = 0;
+                            //         if !app.music_list.contains_key(&id) {
+                            //             tracing::info!(
+                            //                 "[main] GetPlaylistTracks requested: {}",
+                            //                 id
+                            //             );
+                            //             action_tx.try_send(Action::GetPlaylistTracks(id)).ok();
+                            //         }
+                            //     }
+                            // }
                         }
-                    }
+                        Focus::Devices => {
+                            if let Some(devices) = app.available_devices.as_ref() {
+                                if let Some(device) = devices.get(app.selected_device_index) {
+                                    tracing::info!("[main] ChangeDevice requested: {}", device.id);
+                                    action_tx
+                                        .try_send(Action::ChangeDevice(device.id.clone()))
+                                        .ok();
+                                }
+                            }
+                        }
+                        _ => {}
+                    },
                     KeyCode::Char(' ') => {
-                        if app.is_playing {
-                            action_tx.try_send(Action::Pause).ok();
+                        if app.focus != Focus::MusicList {
+                            if app.is_playing {
+                                action_tx.try_send(Action::Pause).ok();
+                            } else {
+                                action_tx.try_send(Action::Play(None)).ok();
+                            }
                         } else {
-                            action_tx.try_send(Action::Play).ok();
+                            // made an action to play of selected music
+
+                            action_tx.try_send(Action::Play(None)).ok();
                         }
                     }
                     _ => {}

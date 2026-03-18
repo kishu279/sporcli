@@ -354,7 +354,7 @@ fn render_music_list_panel(f: &mut Frame, app: &mut AppState, area: Rect) {
                     .skip(scroll)
                     .take(visible)
                     .map(|(i, track)| {
-                        let display = format!("{} - {} [{}]", track.name, track.artist, track.id);
+                        let display = format!("{} - {}", track.name, track.artist);
                         if i == app.selected_music_index {
                             Line::from(Span::styled(
                                 format!(" ▶ {}", display),
